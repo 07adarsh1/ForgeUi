@@ -8,7 +8,7 @@ const Navbar = ({ toggleHistory }) => {
 
   return (
     <>
-      <div className="nav flex items-center justify-between px-[100px] h-[90px] border-b-[1px] border-gray-800">
+      <div className="nav flex items-center justify-between px-6 md:px-12 lg:px-[100px] h-20 md:h-[90px] border-b-[1px] border-gray-800">
         <div className="flex items-center gap-4">
           <div onClick={() => navigate('/')} className="icon cursor-pointer hover:text-white transition-colors">
             <IoArrowBack />

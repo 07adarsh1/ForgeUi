@@ -3,7 +3,7 @@ import { IoCloseSharp, IoTrash } from 'react-icons/io5';
 
 const HistorySidebar = ({ isOpen, onClose, history, onSelect, onClear }) => {
     return (
-        <div className={`fixed top-0 right-0 h-full w-[350px] bg-[#141319] shadow-2xl z-50 transform transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'} border-l border-gray-800`}>
+        <div className={`fixed top-0 right-0 h-full w-full sm:w-[350px] bg-[#141319] shadow-2xl z-50 transform transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'} border-l border-gray-800`}>
             <div className="p-5 h-full flex flex-col">
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="text-xl font-bold text-white">History</h3>

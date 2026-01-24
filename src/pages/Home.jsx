@@ -269,7 +269,7 @@ const Home = () => {
         </div>
 
         {/* Right Section: Output Area */}
-        <div className="lg:col-span-7 h-[85vh] lg:h-auto bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+        <div className="lg:col-span-7 h-[600px] lg:h-auto bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden flex flex-col shadow-2xl">
           {!outputScreen ? (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-600">
               <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
