@@ -13,8 +13,9 @@ const Navbar = ({ toggleHistory }) => {
           <div onClick={() => navigate('/')} className="icon cursor-pointer hover:text-white transition-colors">
             <IoArrowBack />
           </div>
-          <div onClick={() => navigate('/')} className="logo cursor-pointer">
-            <h3 className='text-[25px] font-[700] sp-text'>ForgeUI</h3>
+          <div onClick={() => navigate('/')} className="logo cursor-pointer flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <img src="/logo.png" alt="ForgeUI Logo" className="w-10 h-10 object-contain rounded-full" />
+            <h3 className='text-[24px] font-bold tracking-tight text-white'>ForgeUI</h3>
           </div>
         </div>
 
