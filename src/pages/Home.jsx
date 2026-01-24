@@ -34,12 +34,12 @@ const Home = () => {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   useEffect(() => {
-    const savedHistory = localStorage.getItem('genui_history');
+    const savedHistory = localStorage.getItem('forgeui_history');
     if (savedHistory) setHistory(JSON.parse(savedHistory));
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('genui_history', JSON.stringify(history));
+    localStorage.setItem('forgeui_history', JSON.stringify(history));
   }, [history]);
 
   const addToHistory = (newPrompt, newCode, frameWorkVal) => {
@@ -159,7 +159,7 @@ const Home = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = "GenUI-Component.html";
+    link.download = "ForgeUI-Component.html";
     link.click();
     URL.revokeObjectURL(url);
     toast.success("Downloaded HTML");

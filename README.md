@@ -1,14 +1,14 @@
-# ✨ GenUI - AI Component Generator
+# ✨ ForgeUI - AI Component Generator
 
-**GenUI** is a beautiful, minimalist, and powerful AI-driven tool that instantly converts your natural language prompts into production-ready React + Tailwind CSS components.
+**ForgeUI** is a beautiful, minimalist, and powerful AI-driven tool that instantly converts your natural language prompts into production-ready React + Tailwind CSS components.
 
-Powered by **Google's Gemini 2.5 Flash model**, GenUI bridges the gap between design and implementation, allowing you to prototype and build modern UI interfaces in seconds.
+Powered by **Google's Gemini 2.5 Flash model**, ForgeUI bridges the gap between design and implementation, allowing you to prototype and build modern UI interfaces in seconds.
 
 ---
 
 ## 🚀 Features
 
-- **⚡ Instant Code Generation**: Just describe what you want (e.g., "A modern pricing card with glassmorphism"), and GenUI generates the full HTML/CSS/Tailwind code instantly.
+- **⚡ Instant Code Generation**: Just describe what you want (e.g., "A modern pricing card with glassmorphism"), and ForgeUI generates the full HTML/CSS/Tailwind code instantly.
 - **🎨 Minimalist Aesthetic**: A polished, dark-mode workspace designed with glassmorphism effects and clean typography to keep you focused.
 - **👁️ Live Preview**: See your generated components come to life immediately in an interactive sandbox.
 - **🪄 AI Prompt Enhancer**: Stuck on a simple idea? Click "Enhance with AI" to let the system rewrite your prompt into a detailed, professional design spec.
@@ -32,12 +32,12 @@ Powered by **Google's Gemini 2.5 Flash model**, GenUI bridges the gap between de
 
 ## 📦 Installation & Setup
 
-Follow these steps to run GenUI locally on your machine.
+Follow these steps to run ForgeUI locally on your machine.
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-username/genui.git
-cd genui
+git clone https://github.com/your-username/forgeui.git
+cd forgeui
 ```
 
 ### 2. Install Dependencies
@@ -76,4 +76,4 @@ This project is open-source and free to use.
 
 ---
 
-**Designed & Built with ❤️ by the GenUI Team.**
+**Designed & Built with ❤️ by the ForgeUI Team.**

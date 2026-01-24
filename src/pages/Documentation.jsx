@@ -9,7 +9,7 @@ const Documentation = () => {
     const sections = [
         {
             title: "Concept",
-            content: "GenUI translates natural language into production-ready frontend code. It bridges the gap between design and implementation using advanced AI models.",
+            content: "ForgeUI translates natural language into production-ready frontend code. It bridges the gap between design and implementation using advanced AI models.",
             icon: <IoRocketOutline />
         },
         {
@@ -62,7 +62,7 @@ const Documentation = () => {
                         Documentation
                     </h1>
                     <p className="text-lg text-gray-400 font-light max-w-xl mx-auto leading-relaxed">
-                        Understanding how GenUI empowers your workflow. <br /> Simple. Powerful. Intelligent.
+                        Understanding how ForgeUI empowers your workflow. <br /> Simple. Powerful. Intelligent.
                     </p>
                 </motion.div>
 

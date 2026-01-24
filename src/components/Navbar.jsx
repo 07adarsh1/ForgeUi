@@ -14,7 +14,7 @@ const Navbar = ({ toggleHistory }) => {
             <IoArrowBack />
           </div>
           <div onClick={() => navigate('/')} className="logo cursor-pointer">
-            <h3 className='text-[25px] font-[700] sp-text'>GenUI</h3>
+            <h3 className='text-[25px] font-[700] sp-text'>ForgeUI</h3>
           </div>
         </div>
 
