@@ -1,247 +1,360 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar'
+import HistorySidebar from '../components/HistorySidebar'
 import Select from 'react-select';
-import { BsStars } from 'react-icons/bs';
-import { HiOutlineCode } from 'react-icons/hi';
+// Using only Io5 icons for consistency
+import { IoSparkles, IoCodeSlash, IoClose, IoCopyOutline, IoDownloadOutline, IoOpenOutline, IoRefresh } from 'react-icons/io5';
 import Editor from '@monaco-editor/react';
-import { IoCloseSharp, IoCopy } from 'react-icons/io5';
-import { PiExportBold } from 'react-icons/pi';
-import { ImNewTab } from 'react-icons/im';
-import { FiRefreshCcw } from 'react-icons/fi';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ClipLoader } from 'react-spinners';
 import { toast } from 'react-toastify';
 
 const Home = () => {
 
-  // ✅ Fixed typos in options
   const options = [
     { value: 'html-css', label: 'HTML + CSS' },
-    { value: 'html-tailwind', label: 'HTML + Tailwind CSS' },
+    { value: 'html-tailwind', label: 'HTML + Tailwind' },
     { value: 'html-bootstrap', label: 'HTML + Bootstrap' },
     { value: 'html-css-js', label: 'HTML + CSS + JS' },
-    { value: 'html-tailwind-bootstrap', label: 'HTML + Tailwind + Bootstrap' },
+    { value: 'html-tailwind-bootstrap', label: 'All Frameworks' },
   ];
 
   const [outputScreen, setOutputScreen] = useState(false);
   const [tab, setTab] = useState(1);
   const [prompt, setPrompt] = useState("");
-  const [frameWork, setFrameWork] = useState(options[0]);
+  const [frameWork, setFrameWork] = useState(options[1]); // Default to Tailwind
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [isNewTabOpen, setIsNewTabOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [enhancing, setEnhancing] = useState(false);
 
-  // ✅ Extract code safely
+  // 🕒 History State
+  const [history, setHistory] = useState([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('genui_history');
+    if (savedHistory) setHistory(JSON.parse(savedHistory));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('genui_history', JSON.stringify(history));
+  }, [history]);
+
+  const addToHistory = (newPrompt, newCode, frameWorkVal) => {
+    const newItem = {
+      id: Date.now(),
+      prompt: newPrompt,
+      code: newCode,
+      framework: frameWorkVal,
+      date: new Date().toISOString()
+    };
+    setHistory(prev => [newItem, ...prev]);
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    toast.info("History cleared");
+  };
+
+  const loadHistoryItem = (item) => {
+    setPrompt(item.prompt);
+    setCode(item.code);
+    const fw = options.find(o => o.value === item.framework) || options[1];
+    setFrameWork(fw);
+    setOutputScreen(true);
+    setTab(2); // Preview tab
+    setIsHistoryOpen(false);
+    toast.success("Loaded from history");
+  };
+
   function extractCode(response) {
     const match = response.match(/```(?:\w+)?\n?([\s\S]*?)```/);
     return match ? match[1].trim() : response.trim();
   }
 
-  // ⚠️ API Key (you said you want it inside the file)
-  const ai = new GoogleGenAI({
-    apiKey: "YOUR_API_KEY"
-  });
+  const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 
-  // ✅ Generate code
+  const enhancePrompt = async () => {
+    if (!prompt.trim()) return toast.info("Please enter a basic prompt first");
+
+    try {
+      setEnhancing(true);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const promptImprovement = `
+        Act as a senior UI/UX Designer. Rewrite the following user prompt to be detailed, professional, and focused on modern, high-quality aesthetics (Glassmorphism, clean layout, good typography).
+        User Prompt: "${prompt}"
+        
+        Return ONLY the refined prompt text, nothing else.
+      `;
+
+      const result = await model.generateContent(promptImprovement);
+      const enhancedText = result.response.text().trim();
+      setPrompt(enhancedText);
+      toast.success("Prompt enhanced using AI ✨");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to enhance prompt");
+    } finally {
+      setEnhancing(false);
+    }
+  };
+
   async function getResponse() {
     if (!prompt.trim()) return toast.error("Please describe your component first");
 
     try {
       setLoading(true);
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `
-     You are an experienced programmer with expertise in web development and UI/UX design. You create modern, animated, and fully responsive UI components. You are highly skilled in HTML, CSS, Tailwind CSS, Bootstrap, JavaScript, React, Next.js, Vue.js, Angular, and more.
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-Now, generate a UI component for: ${prompt}  
-Framework to use: ${frameWork.value}  
+      const promptText = `
+      You are an expert frontend developer and UI/UX designer. You specialize in creating modern, minimalist, and highly aesthetic web components.
+      
+      **Task:** Generate a single, self-contained HTML file for the following component: "${prompt}"
+      
+      **Framework:** ${frameWork.value}
+      
+      **Requirements:**
+      1. **Structure:** Return a COMPLETE HTML file (<!DOCTYPE html>...</html>).
+      2. **Dependencies:**
+         - ALWAYS include the **Tailwind CSS CDN** (<script src="https://cdn.tailwindcss.com"></script>) (if Tailwind selected or default).
+         - Include **FontAwesome** (<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">).
+         - Include **Google Fonts** ('Inter', 'Outfit', or 'Playfair Display' based on context).
+      3. **Design Standard:** 
+         - Use "Glassmorphism" or "Neomorphism" where appropriate.
+         - Soft shadows, generous padding, and rounded corners (rounded-xl, rounded-2xl).
+         - Modern color palettes (slate, zinc, indigo, violet).
+      4. **Responsiveness:** Fully mobile-responsive.
+      5. **Output:** Return ONLY the raw code inside a markdown code block.
+      `;
 
-Requirements:  
-- The code must be clean, well-structured, and easy to understand.  
-- Optimize for SEO where applicable.  
-- Focus on creating a modern, animated, and responsive UI design.  
-- Include high-quality hover effects, shadows, animations, colors, and typography.  
-- Return ONLY the code, formatted properly in **Markdown fenced code blocks**.  
-- Do NOT include explanations, text, comments, or anything else besides the code.  
-- And give the whole code in a single HTML file.
-      `,
-      });
+      const result = await model.generateContent(promptText);
+      const response = await result.response;
+      const text = response.text();
 
-      setCode(extractCode(response.text));
+      const extractedCode = extractCode(text);
+      setCode(extractedCode);
+      addToHistory(prompt, extractedCode, frameWork.value);
+
       setOutputScreen(true);
+      setTab(2);
     } catch (error) {
       console.error(error);
-      toast.error("Something went wrong while generating code");
+      toast.error(error.message || "Something went wrong while generating code");
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Copy Code
   const copyCode = async () => {
-    if (!code.trim()) return toast.error("No code to copy");
-    try {
-      await navigator.clipboard.writeText(code);
-      toast.success("Code copied to clipboard");
-    } catch (err) {
-      console.error('Failed to copy: ', err);
-      toast.error("Failed to copy");
-    }
+    if (!code.trim()) return;
+    await navigator.clipboard.writeText(code);
+    toast.success("Copied to clipboard");
   };
 
-  // ✅ Download Code
   const downnloadFile = () => {
-    if (!code.trim()) return toast.error("No code to download");
-
-    const fileName = "GenUI-Code.html"
+    if (!code.trim()) return;
     const blob = new Blob([code], { type: 'text/plain' });
-    let url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = fileName;
+    link.download = "GenUI-Component.html";
     link.click();
     URL.revokeObjectURL(url);
-    toast.success("File downloaded");
+    toast.success("Downloaded HTML");
+  };
+
+  // Custom Styles for React Select to match Minimalist Theme
+  const customSelectStyles = {
+    control: (base, state) => ({
+      ...base,
+      backgroundColor: "rgba(255, 255, 255, 0.05)",
+      borderColor: state.isFocused ? "rgba(255, 255, 255, 0.2)" : "transparent",
+      padding: "8px",
+      borderRadius: "12px",
+      boxShadow: "none",
+      cursor: "pointer",
+      "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.1)" }
+    }),
+    menu: (base) => ({
+      ...base,
+      backgroundColor: "#18181b", // zinc-900
+      borderRadius: "12px",
+      border: "1px solid rgba(255,255,255,0.1)",
+      overflow: "hidden",
+      padding: "4px"
+    }),
+    option: (base, state) => ({
+      ...base,
+      backgroundColor: state.isSelected ? "rgba(255,255,255,0.1)" : "transparent",
+      color: state.isSelected ? "#fff" : "#a1a1aa",
+      borderRadius: "8px",
+      cursor: "pointer",
+      "&:hover": { backgroundColor: "rgba(255,255,255,0.05)", color: "#fff" }
+    }),
+    singleValue: (base) => ({ ...base, color: "#fff", fontWeight: 500 }),
+    placeholder: (base) => ({ ...base, color: "#71717a" }),
+    input: (base) => ({ ...base, color: "#fff" })
   };
 
   return (
     <>
-      <Navbar />
+      <Navbar toggleHistory={() => setIsHistoryOpen(prev => !prev)} />
 
-      {/* ✅ Better responsive layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-6 lg:px-16">
-        {/* Left Section */}
-        <div className="w-full py-6 rounded-xl bg-[#141319] mt-5 p-5">
-          <h3 className='text-[25px] font-semibold sp-text'>AI Component Generator</h3>
-          <p className='text-gray-400 mt-2 text-[16px]'>Describe your component and let AI code it for you.</p>
+      <HistorySidebar
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        history={history}
+        onSelect={loadHistoryItem}
+        onClear={clearHistory}
+      />
 
-          <p className='text-[15px] font-[700] mt-4'>Framework</p>
-          <Select
-            className='mt-2'
-            options={options}
-            value={frameWork}
-            styles={{
-              control: (base) => ({
-                ...base,
-                backgroundColor: "#111",
-                borderColor: "#333",
-                color: "#fff",
-                boxShadow: "none",
-                "&:hover": { borderColor: "#555" }
-              }),
-              menu: (base) => ({
-                ...base,
-                backgroundColor: "#111",
-                color: "#fff"
-              }),
-              option: (base, state) => ({
-                ...base,
-                backgroundColor: state.isSelected
-                  ? "#333"
-                  : state.isFocused
-                    ? "#222"
-                    : "#111",
-                color: "#fff",
-                "&:active": { backgroundColor: "#444" }
-              }),
-              singleValue: (base) => ({ ...base, color: "#fff" }),
-              placeholder: (base) => ({ ...base, color: "#aaa" }),
-              input: (base) => ({ ...base, color: "#fff" })
-            }}
-            onChange={(selected) => setFrameWork(selected)}
-          />
+      <div className="min-h-[calc(100vh-80px)] px-6 lg:px-12 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-          <p className='text-[15px] font-[700] mt-5'>Describe your component</p>
-          <textarea
-            onChange={(e) => setPrompt(e.target.value)}
-            value={prompt}
-            className='w-full min-h-[200px] rounded-xl bg-[#09090B] mt-3 p-3 text-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500 resize-none'
-            placeholder="Describe your component in detail and AI will generate it..."
-          ></textarea>
+        {/* Left Section: Input Area */}
+        <div className="lg:col-span-5 flex flex-col gap-6">
 
-          <div className="flex items-center justify-between mt-3">
-            <p className='text-gray-400 text-sm'>Click on generate button to get your code</p>
+          {/* Input Card */}
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl flex flex-col h-full shadow-2xl">
+            <div className="mb-6">
+              <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+                Create.
+              </h2>
+              <p className="text-gray-400 mt-2 font-light">
+                Describe your vision. Tailwind & HTML generated instantly.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 mb-6">
+              <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold ml-1">Framework</label>
+              <Select
+                options={options}
+                value={frameWork}
+                styles={customSelectStyles}
+                components={{ IndicatorSeparator: () => null }}
+                onChange={(selected) => setFrameWork(selected)}
+              />
+            </div>
+
+            <div className="flex-1 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold ml-1">Prompt</label>
+                <button
+                  onClick={enhancePrompt}
+                  disabled={enhancing || !prompt.trim()}
+                  className="text-xs flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {enhancing ? <ClipLoader size={10} color="#c084fc" /> : <IoSparkles />}
+                  {enhancing ? "Enhancing..." : "Enhance with AI"}
+                </button>
+              </div>
+              <textarea
+                onChange={(e) => setPrompt(e.target.value)}
+                value={prompt}
+                className="w-full flex-1 bg-white/5 border border-white/5 rounded-2xl p-4 text-white placeholder-gray-600 outline-none focus:bg-white/10 focus:border-white/20 transition-all resize-none font-light leading-relaxed"
+                placeholder="e.g. A minimalist pricing card with glassmorphism effect, dark mode, and a gradient button..."
+              ></textarea>
+            </div>
+
             <button
               onClick={getResponse}
-              className="flex items-center p-3 rounded-lg border-0 bg-gradient-to-r from-purple-400 to-purple-600 px-5 gap-2 transition-all hover:opacity-80 hover:scale-105 active:scale-95"
+              disabled={loading}
+              className="mt-6 w-full py-4 rounded-xl font-medium text-black bg-white hover:bg-gray-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? <ClipLoader color='white' size={18} /> : <BsStars />}
-              Generate
+              {loading ? <ClipLoader color='#000' size={20} /> : <IoSparkles className="text-lg" />}
+              {loading ? "Generating..." : "Generate Component"}
             </button>
           </div>
         </div>
 
-        {/* Right Section */}
-        <div className="relative mt-2 w-full h-[80vh] bg-[#141319] rounded-xl overflow-hidden">
-          {
-            !outputScreen ? (
-              <div className="w-full h-full flex items-center flex-col justify-center">
-                <div className="p-5 w-[70px] flex items-center justify-center text-[30px] h-[70px] rounded-full bg-gradient-to-r from-purple-400 to-purple-600">
-                  <HiOutlineCode />
-                </div>
-                <p className='text-[16px] text-gray-400 mt-3'>Your component & code will appear here.</p>
+        {/* Right Section: Output Area */}
+        <div className="lg:col-span-7 h-[85vh] lg:h-auto bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+          {!outputScreen ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-600">
+              <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
+                <IoCodeSlash className="text-3xl opacity-50" />
               </div>
-            ) : (
-              <>
-                {/* Tabs */}
-                <div className="bg-[#17171C] w-full h-[50px] flex items-center gap-3 px-3">
+              <p className="font-light">Your generated output will appear here.</p>
+            </div>
+          ) : (
+            <>
+              {/* Minimal Toolbar */}
+              <div className="h-14 border-b border-white/10 flex items-center justify-between px-6 bg-white/5">
+                <div className="flex items-center gap-1 bg-black/20 p-1 rounded-lg">
                   <button
                     onClick={() => setTab(1)}
-                    className={`w-1/2 py-2 rounded-lg transition-all ${tab === 1 ? "bg-purple-600 text-white" : "bg-zinc-800 text-gray-300"}`}
+                    className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${tab === 1 ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
                   >
                     Code
                   </button>
                   <button
                     onClick={() => setTab(2)}
-                    className={`w-1/2 py-2 rounded-lg transition-all ${tab === 2 ? "bg-purple-600 text-white" : "bg-zinc-800 text-gray-300"}`}
+                    className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${tab === 2 ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
                   >
                     Preview
                   </button>
                 </div>
 
-                {/* Toolbar */}
-                <div className="bg-[#17171C] w-full h-[50px] flex items-center justify-between px-4">
-                  <p className='font-bold text-gray-200'>Code Editor</p>
-                  <div className="flex items-center gap-2">
-                    {tab === 1 ? (
-                      <>
-                        <button onClick={copyCode} className="w-10 h-10 rounded-xl border border-zinc-800 flex items-center justify-center hover:bg-[#333]"><IoCopy /></button>
-                        <button onClick={downnloadFile} className="w-10 h-10 rounded-xl border border-zinc-800 flex items-center justify-center hover:bg-[#333]"><PiExportBold /></button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={() => setIsNewTabOpen(true)} className="w-10 h-10 rounded-xl border border-zinc-800 flex items-center justify-center hover:bg-[#333]"><ImNewTab /></button>
-                        <button onClick={() => setRefreshKey(prev => prev + 1)} className="w-10 h-10 rounded-xl border border-zinc-800 flex items-center justify-center hover:bg-[#333]"><FiRefreshCcw /></button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Editor / Preview */}
-                <div className="h-full">
-                  {tab === 1 ? (
-                    <Editor value={code} height="100%" theme='vs-dark' language="html" />
-                  ) : (
-                    <iframe key={refreshKey} srcDoc={code} className="w-full h-full bg-white text-black"></iframe>
+                <div className="flex items-center gap-3">
+                  {tab === 1 && (
+                    <>
+                      <button onClick={copyCode} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors" title="Copy"><IoCopyOutline /></button>
+                      <button onClick={downnloadFile} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors" title="Download"><IoDownloadOutline /></button>
+                    </>
+                  )}
+                  {tab === 2 && (
+                    <>
+                      <button onClick={() => setRefreshKey(p => p + 1)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors" title="Refresh"><IoRefresh /></button>
+                      <button onClick={() => setIsNewTabOpen(true)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors" title="Expand"><IoOpenOutline /></button>
+                    </>
                   )}
                 </div>
-              </>
-            )
-          }
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 relative">
+                {tab === 1 ? (
+                  <Editor
+                    value={code}
+                    height="100%"
+                    theme='vs-dark'
+                    language="html"
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 14,
+                      padding: { top: 20 },
+                      fontFamily: "'JetBrains Mono', monospace",
+                      scrollBeyondLastLine: false,
+                    }}
+                  />
+                ) : (
+                  <iframe
+                    key={refreshKey}
+                    srcDoc={code}
+                    className="w-full h-full bg-white"
+                    title="preview"
+                  ></iframe>
+                )}
+              </div>
+            </>
+          )}
         </div>
+
       </div>
 
-      {/* ✅ Fullscreen Preview Overlay */}
+      {/* Minimal Fullscreen Modal */}
       {isNewTabOpen && (
-        <div className="absolute inset-0 bg-white w-screen h-screen overflow-auto">
-          <div className="text-black w-full h-[60px] flex items-center justify-between px-5 bg-gray-100">
-            <p className='font-bold'>Preview</p>
-            <button onClick={() => setIsNewTabOpen(false)} className="w-10 h-10 rounded-xl border border-zinc-300 flex items-center justify-center hover:bg-gray-200">
-              <IoCloseSharp />
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col animate-in fade-in duration-200">
+          <div className="h-16 flex items-center justify-between px-8 border-b border-white/10">
+            <span className="text-white font-medium">Fullscreen Preview</span>
+            <button onClick={() => setIsNewTabOpen(false)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all">
+              <IoClose />
             </button>
           </div>
-          <iframe srcDoc={code} className="w-full h-[calc(100vh-60px)]"></iframe>
+          <div className="flex-1 p-8">
+            <iframe srcDoc={code} className="w-full h-full bg-white rounded-xl shadow-2xl"></iframe>
+          </div>
         </div>
       )}
     </>
