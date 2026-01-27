@@ -16,6 +16,7 @@ const Home = () => {
     { value: 'html-tailwind', label: 'HTML + Tailwind' },
     { value: 'html-bootstrap', label: 'HTML + Bootstrap' },
     { value: 'html-css-js', label: 'HTML + CSS + JS' },
+    { value: 'react-tailwind', label: 'React + Tailwind' },
     { value: 'html-tailwind-bootstrap', label: 'All Frameworks' },
   ];
 
@@ -118,9 +119,17 @@ const Home = () => {
       **Requirements:**
       1. **Structure:** Return a COMPLETE HTML file (<!DOCTYPE html>...</html>).
       2. **Dependencies:**
-         - ALWAYS include the **Tailwind CSS CDN** (<script src="https://cdn.tailwindcss.com"></script>) (if Tailwind selected or default).
+         - ALWAYS include the **Tailwind CSS CDN** (<script src="https://cdn.tailwindcss.com"></script>) (if Tailwind or React selected).
          - Include **FontAwesome** (<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">).
          - Include **Google Fonts** ('Inter', 'Outfit', or 'Playfair Display' based on context).
+         ${frameWork.value === 'react-tailwind' ? `
+         - Include React & ReactDOM CDNs:
+           <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+           <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+         - Include Babel for JSX: <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+         - Write the React code inside <script type="text/babel">...</script>
+         - Ensure the root element <div id="root"></div> exists and React renders into it.
+         ` : ''}
       3. **Design Standard:** 
          - Use "Glassmorphism" or "Neomorphism" where appropriate.
          - Soft shadows, generous padding, and rounded corners (rounded-xl, rounded-2xl).
