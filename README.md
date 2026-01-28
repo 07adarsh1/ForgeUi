@@ -76,4 +76,4 @@ This project is open-source and free to use.
 
 ---
 
-**Designed & Built with ❤️.**
+**Designed & Built with ❤️ by the ForgeUI Team.**
