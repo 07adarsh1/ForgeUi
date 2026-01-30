@@ -6,8 +6,9 @@ import Select from 'react-select';
 import {
   IoSparkles, IoCodeSlash, IoClose, IoCopyOutline, IoDownloadOutline,
   IoOpenOutline, IoRefresh, IoSpeedometer, IoAccessibility,
-  IoMoon, IoScan, IoGitCompare
+  IoMoon, IoScan, IoGitCompare, IoSaveOutline
 } from 'react-icons/io5';
+import { libraryService } from '../lib/db';
 import Editor, { DiffEditor } from '@monaco-editor/react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ClipLoader } from 'react-spinners';
@@ -240,6 +241,54 @@ const Home = () => {
       setLoading(false);
     }
   }
+
+  const saveToLibrary = async () => {
+    const codeToSave = mode === 'create' ? generatedCode : improvedCode;
+    if (!codeToSave) return;
+
+    try {
+      const nameGuess = (prompt || "Untitled Component").split(' ').slice(0, 3).join(' ');
+      let folderName = nameGuess.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (!folderName) folderName = "component";
+
+      // Ensure unique folder name
+      let uniqueFolderName = folderName;
+      let counter = 1;
+      while (await libraryService.isFolderNameTaken(uniqueFolderName)) {
+        uniqueFolderName = `${folderName}-${counter}`;
+        counter++;
+      }
+
+      const id = libraryService.generateId(uniqueFolderName);
+      const timestamp = new Date().toISOString();
+      const componentName = uniqueFolderName.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+      const fileName = `components/${componentName}.html`; // Using .html as output is full HTML
+
+      const newComponent = {
+        id,
+        folderName: uniqueFolderName,
+        files: {
+          [fileName]: codeToSave,
+          "index.ts": `export { default } from './components/${componentName}';`,
+          "meta.json": JSON.stringify({
+            name: nameGuess,
+            tags: [frameWork.label],
+            createdAt: timestamp
+          }, null, 2),
+          "preview.json": JSON.stringify({
+            originalPrompt: prompt,
+            thumbnail: ""
+          }, null, 2)
+        }
+      };
+
+      await libraryService.saveComponent(newComponent);
+      toast.success("Saved to Library 📚");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to save to library");
+    }
+  };
 
 
   // --- Helper Functions ---
@@ -520,14 +569,13 @@ const Home = () => {
                     <button onClick={() => setTab(2)} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${tab === 2 ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}>Preview</button>
                   </div>
                   <div className="flex items-center gap-3">
-                    {tab === 1 && (
-                      <>
-                        <button onClick={copyCode} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Copy"><IoCopyOutline /></button>
-                        <button onClick={downloadFile} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Download"><IoDownloadOutline /></button>
-                      </>
-                    )}
+                    <button onClick={copyCode} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Copy"><IoCopyOutline /></button>
+                    <button onClick={downloadFile} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Download"><IoDownloadOutline /></button>
+                    <button onClick={saveToLibrary} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Save to Library"><IoSaveOutline /></button>
+
                     {tab === 2 && (
                       <>
+                        <div className="w-px h-4 bg-white/10 mx-1"></div>
                         <button onClick={() => setRefreshKey(p => p + 1)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Refresh"><IoRefresh /></button>
                         <button onClick={() => setIsNewTabOpen(true)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Expand"><IoOpenOutline /></button>
                       </>
@@ -569,6 +617,7 @@ const Home = () => {
                   <div className="flex items-center gap-3">
                     <button onClick={copyCode} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Copy"><IoCopyOutline /></button>
                     <button onClick={downloadFile} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Download"><IoDownloadOutline /></button>
+                    <button onClick={saveToLibrary} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Save to Library"><IoSaveOutline /></button>
                   </div>
                 </div>
                 <div className="flex-1 relative">
@@ -605,22 +654,24 @@ const Home = () => {
           )}
         </div>
 
-      </div>
+      </div >
 
       {/* Fullscreen Modal (Create Mode Only) */}
-      {isNewTabOpen && mode === 'create' && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col animate-in fade-in duration-200">
-          <div className="h-16 flex items-center justify-between px-8 border-b border-white/10">
-            <span className="text-white font-medium">Fullscreen Preview</span>
-            <button onClick={() => setIsNewTabOpen(false)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all">
-              <IoClose />
-            </button>
+      {
+        isNewTabOpen && mode === 'create' && (
+          <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col animate-in fade-in duration-200">
+            <div className="h-16 flex items-center justify-between px-8 border-b border-white/10">
+              <span className="text-white font-medium">Fullscreen Preview</span>
+              <button onClick={() => setIsNewTabOpen(false)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all">
+                <IoClose />
+              </button>
+            </div>
+            <div className="flex-1 p-8">
+              <iframe srcDoc={generatedCode} className="w-full h-full bg-white rounded-xl shadow-2xl"></iframe>
+            </div>
           </div>
-          <div className="flex-1 p-8">
-            <iframe srcDoc={generatedCode} className="w-full h-full bg-white rounded-xl shadow-2xl"></iframe>
-          </div>
-        </div>
-      )}
+        )
+      }
     </>
   )
 }

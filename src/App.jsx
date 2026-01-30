@@ -6,6 +6,7 @@ import NoPage from './pages/NoPage';
 import StarsCanvas from './components/StarBackground';
 import LandingPage from './pages/LandingPage';
 import Documentation from './pages/Documentation';
+import Library from './pages/Library';
 
 const App = () => {
   return (
@@ -15,6 +16,7 @@ const App = () => {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/generate" element={<Home />} />
+          <Route path="/library" element={<Library />} />
           <Route path="/docs" element={<Documentation />} />
           <Route path="*" element={<NoPage />} />
         </Routes>
