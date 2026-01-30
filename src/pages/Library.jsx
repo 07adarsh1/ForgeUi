@@ -4,7 +4,7 @@ import FileExplorer from '../components/library/FileExplorer';
 import LibraryEditor from '../components/library/LibraryEditor';
 import { libraryService } from '../lib/db';
 import { toast } from 'react-toastify';
-import { IoSaveOutline, IoDownloadOutline, IoTrashOutline } from 'react-icons/io5';
+import { IoSaveOutline, IoDownloadOutline, IoTrashOutline, IoMenu, IoClose } from 'react-icons/io5';
 import { exportComponentAsZip } from '../lib/export';
 import { ClipLoader } from 'react-spinners';
 
@@ -16,6 +16,21 @@ const Library = () => {
     const [isExporting, setIsExporting] = useState(false);
     const [deleteModal, setDeleteModal] = useState({ isOpen: false, componentId: null });
     const [isUnsaved, setIsUnsaved] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+    // Auto-close sidebar on mobile
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth < 768) {
+                setIsSidebarOpen(false);
+            } else {
+                setIsSidebarOpen(true);
+            }
+        };
+        handleResize(); // Initial check
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
         loadComponents();
@@ -137,16 +152,55 @@ const Library = () => {
         <div className="flex flex-col h-screen bg-[#09090b] text-white overflow-hidden">
             <Navbar />
 
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden relative">
+                {/* Mobile Toggle Button */}
+                {!isSidebarOpen && (
+                    <button
+                        onClick={() => setIsSidebarOpen(true)}
+                        className="absolute top-3 left-4 z-20 p-2 bg-[#18181b] border border-white/10 rounded-lg text-gray-400 hover:text-white md:hidden"
+                    >
+                        <IoMenu size={20} />
+                    </button>
+                )}
+
                 {/* Left Sidebar: File Explorer */}
-                <div className="w-64 flex-shrink-0 border-r border-white/10 bg-[#09090b]/50 backdrop-blur-xl">
-                    <FileExplorer
-                        components={components}
-                        onSelectFile={handleFileSelect}
-                        selectedFile={selectedFile?.path}
-                        onDeleteComponent={handleDeleteClick}
-                    />
+                <div
+                    className={`
+                        absolute md:relative z-30 h-full
+                        w-64 flex-shrink-0 border-r border-white/10 bg-[#09090b]/95 backdrop-blur-xl transition-all duration-300 ease-in-out
+                        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:w-0 md:border-r-0 md:overflow-hidden'}
+                    `}
+                >
+                    <div className="flex items-center justify-between p-2 md:hidden">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-2">Library</span>
+                        <button onClick={() => setIsSidebarOpen(false)} className="p-2 text-gray-400 hover:text-white">
+                            <IoClose size={20} />
+                        </button>
+                    </div>
+
+                    <div className={`${isSidebarOpen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200 h-full`}>
+                        <FileExplorer
+                            components={components}
+                            onSelectFile={handleFileSelect}
+                            selectedFile={selectedFile?.path}
+                            onDeleteComponent={handleDeleteClick}
+                            onClose={() => setIsSidebarOpen(false)}
+                        />
+                    </div>
                 </div>
+
+                {/* Sidebar Re-open Button (Desktop) */}
+                {!isSidebarOpen && (
+                    <div className="hidden md:flex flex-col items-center border-r border-white/10 bg-[#09090b] w-10 py-4 gap-4">
+                        <button
+                            onClick={() => setIsSidebarOpen(true)}
+                            className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg"
+                            title="Open Sidebar"
+                        >
+                            <IoMenu size={20} />
+                        </button>
+                    </div>
+                )}
 
                 {/* Right Panel: Editor */}
                 <div className="flex-1 flex flex-col bg-[#1e1e1e]">

@@ -61,6 +61,9 @@ const Home = () => {
   // 🕒 History State
   const [history, setHistory] = useState([]);
 
+  // Mobile State
+  const [mobileTab, setMobileTab] = useState('create'); // 'create' | 'preview' | 'code'
+
   useEffect(() => {
     const savedHistory = localStorage.getItem('forgeui_history');
     if (savedHistory) setHistory(JSON.parse(savedHistory));
@@ -161,6 +164,8 @@ const Home = () => {
       toast.error(error.message || "Something went wrong while generating code");
     } finally {
       setLoading(false);
+      // Switch to preview on mobile after generation
+      if (window.innerWidth < 768) setMobileTab('preview');
     }
   };
 
@@ -275,6 +280,7 @@ const Home = () => {
     setImprovedCode("");
     setImproveTab('diff');
     toast.info("Transferred to Improve Mode");
+    if (window.innerWidth < 768) setMobileTab('create');
   };
 
 
@@ -323,10 +329,13 @@ const Home = () => {
         onClear={clearHistory}
       />
 
-      <div className="min-h-[calc(100vh-80px)] px-4 lg:px-12 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      {/* Main Content Area */}
+      {/* Mobile: 1 col, Desktop: 12 col grid */}
+      <div className="min-h-[calc(100vh-80px)] px-4 lg:px-12 py-4 md:py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 pb-24 md:pb-8">
 
         {/* --- LEFT COLUMN: INPUT --- */}
-        <div className="lg:col-span-5 flex flex-col gap-6">
+        {/* Visible on Mobile if mobileTab is 'create', always visible on desktop */}
+        <div className={`lg:col-span-5 flex flex-col gap-6 ${mobileTab !== 'create' ? 'hidden md:flex' : 'flex'}`}>
 
           {/* Mode Toggle */}
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-2 rounded-2xl flex gap-1">
@@ -505,7 +514,24 @@ const Home = () => {
         </div>
 
         {/* --- RIGHT COLUMN: OUTPUT --- */}
-        <div className="lg:col-span-7 h-[600px] lg:h-auto bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+        {/* Visible on Mobile if mobileTab is 'preview' or 'code', always visible on desktop */}
+        <div className={`lg:col-span-7 h-[calc(100vh-200px)] lg:h-auto bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden flex flex-col shadow-2xl ${mobileTab === 'create' ? 'hidden md:flex' : 'flex'}`}>
+
+          {/* Mobile Tab Header (Preview vs Code switcher for when not in Create mode) */}
+          <div className="md:hidden flex h-12 bg-white/5 border-b border-white/10">
+            <button
+              onClick={() => setMobileTab('code')}
+              className={`flex-1 text-xs font-bold uppercase tracking-wider ${mobileTab === 'code' ? 'text-white bg-white/10' : 'text-gray-500'}`}
+            >
+              Code
+            </button>
+            <button
+              onClick={() => setMobileTab('preview')}
+              className={`flex-1 text-xs font-bold uppercase tracking-wider ${mobileTab === 'preview' ? 'text-white bg-white/10' : 'text-gray-500'}`}
+            >
+              Preview
+            </button>
+          </div>
 
           {/* Conditional Rendering based on Mode */}
           {mode === 'create' ? (
@@ -628,6 +654,32 @@ const Home = () => {
           </div>
         )
       }
+
+      {/* Mobile Bottom Navigation Bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#18181b] border-t border-white/10 z-50 flex items-center justify-around px-2 pb-safe">
+        <button
+          onClick={() => setMobileTab('create')}
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${mobileTab === 'create' ? 'text-white' : 'text-gray-500'}`}
+        >
+          <IoSparkles size={20} />
+          <span className="text-[10px] font-medium">Create</span>
+        </button>
+        <button
+          onClick={() => setMobileTab('preview')}
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${mobileTab === 'preview' ? 'text-white' : 'text-gray-500'}`}
+        >
+          <IoSpeedometer size={20} />
+          <span className="text-[10px] font-medium">Preview</span>
+        </button>
+        <button
+          onClick={() => setMobileTab('code')}
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${mobileTab === 'code' ? 'text-white' : 'text-gray-500'}`}
+        >
+          <IoCodeSlash size={20} />
+          <span className="text-[10px] font-medium">Code</span>
+        </button>
+      </div>
+
     </>
   )
 }

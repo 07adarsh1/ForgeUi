@@ -7,7 +7,8 @@ import {
     IoDocumentText,
     IoLogoReact,
     IoRefresh,
-    IoTrashOutline
+    IoTrashOutline,
+    IoClose
 } from 'react-icons/io5';
 import { SiTypescript, SiJavascript } from 'react-icons/si';
 
@@ -76,7 +77,7 @@ const FileTreeNode = ({ node, level, onSelect, selectedFile, expandedFolders, to
     );
 };
 
-const FileExplorer = ({ components, onSelectFile, selectedFile, onRefresh, onDeleteComponent }) => {
+const FileExplorer = ({ components, onSelectFile, selectedFile, onRefresh, onDeleteComponent, onClose }) => {
     const [expandedFolders, setExpandedFolders] = useState(new Set());
 
     const toggleFolder = (path) => {
@@ -155,12 +156,19 @@ const FileExplorer = ({ components, onSelectFile, selectedFile, onRefresh, onDel
     }, [components]);
 
     return (
-        <div className="flex flex-col h-full bg-[#18181b] border-r border-white/10 select-none overflow-y-auto">
+        <div className="flex flex-col h-full bg-transparent select-none overflow-y-auto w-full">
             <div className="p-4 uppercase text-xs font-bold text-gray-500 tracking-wider flex items-center justify-between">
                 <span>Explorer</span>
-                <button onClick={onRefresh} className="hover:text-white transition-colors" title="Refresh Library">
-                    <IoRefresh size={14} />
-                </button>
+                <div className="flex items-center gap-1">
+                    <button onClick={onRefresh} className="p-1 hover:text-white transition-colors rounded hover:bg-white/10" title="Refresh Library">
+                        <IoRefresh size={14} />
+                    </button>
+                    {onClose && (
+                        <button onClick={onClose} className="p-1 hover:text-white transition-colors rounded hover:bg-white/10 hidden md:block" title="Collapse Sidebar">
+                            <IoClose size={16} />
+                        </button>
+                    )}
+                </div>
             </div>
             <div className="flex-1">
                 {treeData.length === 0 ? (

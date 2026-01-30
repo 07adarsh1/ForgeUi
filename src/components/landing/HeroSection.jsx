@@ -28,7 +28,7 @@ const HeroSection = () => {
             >
 
 
-                <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 md:mb-8 bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-gray-400 leading-[1.1] md:leading-[1.1]">
+                <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 md:mb-8 bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-gray-400 leading-tight md:leading-[1.1]">
                     Turn text into production <br className="hidden md:block" />
                     <span className="text-purple-400 inline-block">React Components.</span>
                 </h1>
