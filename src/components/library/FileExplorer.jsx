@@ -6,7 +6,8 @@ import {
     IoFolder,
     IoDocumentText,
     IoLogoReact,
-    IoRefresh
+    IoRefresh,
+    IoTrashOutline
 } from 'react-icons/io5';
 import { SiTypescript, SiJavascript } from 'react-icons/si';
 
@@ -18,7 +19,7 @@ const getFileIcon = (fileName) => {
     return <IoDocumentText className="text-gray-400" />;
 };
 
-const FileTreeNode = ({ node, level, onSelect, selectedFile, expandedFolders, toggleFolder }) => {
+const FileTreeNode = ({ node, level, onSelect, selectedFile, expandedFolders, toggleFolder, onDelete }) => {
     const isExpanded = expandedFolders.has(node.path);
     const isSelected = selectedFile === node.path;
 
@@ -38,15 +39,26 @@ const FileTreeNode = ({ node, level, onSelect, selectedFile, expandedFolders, to
     return (
         <div>
             <div
-                className={`flex items-center gap-1 py-1 px-2 cursor-pointer hover:bg-white/5 transition-colors text-gray-300 font-medium`}
+                className={`flex items-center gap-1 py-1 px-2 cursor-pointer hover:bg-white/5 transition-colors text-gray-300 font-medium group justify-between`}
                 style={{ paddingLeft: `${level * 16}px` }}
                 onClick={() => toggleFolder(node.path)}
             >
-                <span className="text-gray-500">
-                    {isExpanded ? <IoChevronDown /> : <IoChevronForward />}
-                </span>
-                {isExpanded ? <IoFolderOpen className="text-purple-400" /> : <IoFolder className="text-purple-400" />}
-                <span className="text-sm truncate select-none">{node.name}</span>
+                <div className="flex items-center gap-1 overflow-hidden">
+                    <span className="text-gray-500">
+                        {isExpanded ? <IoChevronDown /> : <IoChevronForward />}
+                    </span>
+                    {isExpanded ? <IoFolderOpen className="text-purple-400" /> : <IoFolder className="text-purple-400" />}
+                    <span className="text-sm truncate select-none">{node.name}</span>
+                </div>
+                {level === 0 && onDelete && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onDelete(node.componentId); }}
+                        className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all p-1"
+                        title="Delete Component"
+                    >
+                        <IoTrashOutline />
+                    </button>
+                )}
             </div>
             {isExpanded && node.children.map((child) => (
                 <FileTreeNode
@@ -57,13 +69,14 @@ const FileTreeNode = ({ node, level, onSelect, selectedFile, expandedFolders, to
                     selectedFile={selectedFile}
                     expandedFolders={expandedFolders}
                     toggleFolder={toggleFolder}
+                    onDelete={onDelete}
                 />
             ))}
         </div>
     );
 };
 
-const FileExplorer = ({ components, onSelectFile, selectedFile, onRefresh }) => {
+const FileExplorer = ({ components, onSelectFile, selectedFile, onRefresh, onDeleteComponent }) => {
     const [expandedFolders, setExpandedFolders] = useState(new Set());
 
     const toggleFolder = (path) => {
@@ -84,6 +97,7 @@ const FileExplorer = ({ components, onSelectFile, selectedFile, onRefresh }) => 
                 name: comp.folderName,
                 path: comp.folderName,
                 type: 'folder',
+                componentId: comp.id,
                 children: []
             };
 
@@ -163,6 +177,7 @@ const FileExplorer = ({ components, onSelectFile, selectedFile, onRefresh }) => 
                             selectedFile={selectedFile}
                             expandedFolders={expandedFolders}
                             toggleFolder={toggleFolder}
+                            onDelete={onDeleteComponent}
                         />
                     ))
                 )}

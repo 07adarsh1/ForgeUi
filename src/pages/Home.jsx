@@ -9,11 +9,14 @@ import {
   IoMoon, IoScan, IoGitCompare, IoSaveOutline
 } from 'react-icons/io5';
 import { libraryService } from '../lib/db';
+import { generatePreviewHtml } from '../lib/preview';
 import Editor, { DiffEditor } from '@monaco-editor/react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ClipLoader } from 'react-spinners';
 import { toast } from 'react-toastify';
 import Groq from "groq-sdk";
+import { getCreationPrompt, getEnhancementPrompt, getImprovementPrompt } from '../lib/prompts';
+import { extractCode, prepareComponentForSave } from '../lib/componentUtils';
 
 const Home = () => {
 
@@ -43,6 +46,7 @@ const Home = () => {
   const [frameWork, setFrameWork] = useState(options[1]);
   const [modelProvider, setModelProvider] = useState(aiOptions[0]);
   const [generatedCode, setGeneratedCode] = useState("");
+  const [previewHtml, setPreviewHtml] = useState("");
   const [outputScreen, setOutputScreen] = useState(false);
   const [tab, setTab] = useState(1);
   const [enhancing, setEnhancing] = useState(false);
@@ -94,11 +98,6 @@ const Home = () => {
     toast.success("Loaded from history");
   };
 
-  function extractCode(response) {
-    const match = response.match(/```(?:\w+)?\n?([\s\S]*?)```/);
-    return match ? match[1].trim() : response.trim();
-  }
-
   const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
   const groq = new Groq({ apiKey: import.meta.env.VITE_GROQ_API_KEY, dangerouslyAllowBrowser: true });
 
@@ -123,12 +122,7 @@ const Home = () => {
 
     try {
       setEnhancing(true);
-      const promptImprovement = `
-        Act as a senior UI/UX Designer. Rewrite the following user prompt to be detailed, professional, and focused on modern, high-quality aesthetics (Glassmorphism, clean layout, good typography).
-        User Prompt: "${prompt}"
-        
-        Return ONLY the refined prompt text, nothing else.
-      `;
+      const promptImprovement = getEnhancementPrompt(prompt);
 
       const enhancedText = (await generateWithAI(promptImprovement)).trim();
       setPrompt(enhancedText);
@@ -146,39 +140,18 @@ const Home = () => {
 
     try {
       setLoading(true);
-      const promptText = `
-      You are an expert frontend developer and UI/UX designer. You specialize in creating modern, minimalist, and highly aesthetic web components.
-      
-      **Task:** Generate a single, self-contained HTML file for the following component: "${prompt}"
-      
-      **Framework:** ${frameWork.value}
-      
-      **Requirements:**
-      1. **Structure:** Return a COMPLETE HTML file (<!DOCTYPE html>...</html>).
-      2. **Dependencies:**
-         - ALWAYS include the **Tailwind CSS CDN** (<script src="https://cdn.tailwindcss.com"></script>) (if Tailwind or React selected).
-         - Include **FontAwesome** (<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">).
-         - Include **Google Fonts** ('Inter', 'Outfit', or 'Playfair Display' based on context).
-         ${frameWork.value === 'react-tailwind' ? `
-         - Include React & ReactDOM CDNs:
-           <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-           <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-         - Include Babel for JSX: <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-         - Write the React code inside <script type="text/babel">...</script>
-         - Ensure the root element <div id="root"></div> exists and React renders into it.
-         ` : ''}
-      3. **Design Standard:** 
-         - Use "Glassmorphism" or "Neomorphism" where appropriate.
-         - Soft shadows, generous padding, and rounded corners (rounded-xl, rounded-2xl).
-         - Modern color palettes (slate, zinc, indigo, violet).
-      4. **Responsiveness:** Fully mobile-responsive.
-      5. **Output:** Return ONLY the raw code inside a markdown code block.
-      `;
+      setLoading(true);
+      const promptText = getCreationPrompt(frameWork.value, prompt);
 
       const text = await generateWithAI(promptText);
 
       const extractedCode = extractCode(text);
       setGeneratedCode(extractedCode);
+
+      // Generate preview HTML separate from the source code
+      const preview = generatePreviewHtml(extractedCode, frameWork.value);
+      setPreviewHtml(preview);
+
       addToHistory(prompt, extractedCode, frameWork.value);
 
       setOutputScreen(true);
@@ -209,18 +182,10 @@ const Home = () => {
       setLoading(true);
       if (mode === 'improve') setImprovedCode("");
 
-      const fullPrompt = `
-        You are an expert code refactorer.
-        
-        **Task:** ${actionPrompt === 'custom' ? customImprovePrompt : actionPrompt}
-        
-        **Input Code:**
-        \`\`\`
-        ${codeToRefine}
-        \`\`\`
-        
-        **Output:** Return ONLY the full improved code inside a markdown code block. Do not add explanations.
-      `;
+      if (mode === 'improve') setImprovedCode("");
+
+      const userInstruction = actionPrompt === 'custom' ? customImprovePrompt : actionPrompt;
+      const fullPrompt = getImprovementPrompt(userInstruction, codeToRefine);
 
       const text = await generateWithAI(fullPrompt);
       const extracted = extractCode(text);
@@ -261,26 +226,17 @@ const Home = () => {
 
       const id = libraryService.generateId(uniqueFolderName);
       const timestamp = new Date().toISOString();
-      const componentName = uniqueFolderName.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('');
-      const fileName = `components/${componentName}.html`; // Using .html as output is full HTML
+      const isReact = frameWork.value === 'react-tailwind';
 
-      const newComponent = {
-        id,
-        folderName: uniqueFolderName,
-        files: {
-          [fileName]: codeToSave,
-          "index.ts": `export { default } from './components/${componentName}';`,
-          "meta.json": JSON.stringify({
-            name: nameGuess,
-            tags: [frameWork.label],
-            createdAt: timestamp
-          }, null, 2),
-          "preview.json": JSON.stringify({
-            originalPrompt: prompt,
-            thumbnail: ""
-          }, null, 2)
-        }
-      };
+      // Safeguard: Prevent saving HTML as React
+      if (isReact && (codeToSave.trim().startsWith('<!DOCTYPE') || codeToSave.trim().startsWith('<html'))) {
+        toast.error("Error: Current code looks like HTML, but 'React' format is selected. Please regenerate to match the format.");
+        return;
+      }
+
+      const newComponent = prepareComponentForSave(codeToSave, frameWork.value, uniqueFolderName, prompt, timestamp);
+      // We need to inject the ID manually since helper doesn't generate it
+      newComponent.id = id;
 
       await libraryService.saveComponent(newComponent);
       toast.success("Saved to Library 📚");
@@ -307,10 +263,10 @@ const Home = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = "ForgeUI-Component.html";
+    link.download = `ForgeUI-Component.${frameWork.value === 'react-tailwind' ? 'tsx' : 'html'}`;
     link.click();
     URL.revokeObjectURL(url);
-    toast.success("Downloaded HTML");
+    toast.success("Downloaded Source");
   };
 
   const handleRefine = () => {
@@ -590,9 +546,9 @@ const Home = () => {
                     </div>
                   )}
                   {tab === 1 ? (
-                    <Editor value={generatedCode} height="100%" theme='vs-dark' language="html" options={{ minimap: { enabled: false }, fontSize: 14, padding: { top: 20 }, fontFamily: "'JetBrains Mono', monospace" }} />
+                    <Editor value={generatedCode} height="100%" theme='vs-dark' language={frameWork.value === 'react-tailwind' ? 'typescript' : 'html'} options={{ minimap: { enabled: false }, fontSize: 14, padding: { top: 20 }, fontFamily: "'JetBrains Mono', monospace" }} />
                   ) : (
-                    <iframe key={refreshKey} srcDoc={generatedCode} className="w-full h-full bg-white" title="preview" />
+                    <iframe key={refreshKey} srcDoc={previewHtml} className="w-full h-full bg-white" title="preview" />
                   )}
                 </div>
               </>
@@ -641,12 +597,12 @@ const Home = () => {
                       value={improvedCode}
                       height="100%"
                       theme='vs-dark'
-                      language="html"
+                      language={frameWork.value === 'react-tailwind' ? 'typescript' : 'html'}
                       options={{ minimap: { enabled: false }, fontSize: 14, padding: { top: 20 }, fontFamily: "'JetBrains Mono', monospace" }}
                     />
                   )}
                   {improveTab === 'preview' && (
-                    <iframe srcDoc={improvedCode} className="w-full h-full bg-white" title="preview" />
+                    <iframe srcDoc={generatePreviewHtml(improvedCode, frameWork.value)} className="w-full h-full bg-white" title="preview" />
                   )}
                 </div>
               </>
@@ -667,7 +623,7 @@ const Home = () => {
               </button>
             </div>
             <div className="flex-1 p-8">
-              <iframe srcDoc={generatedCode} className="w-full h-full bg-white rounded-xl shadow-2xl"></iframe>
+              <iframe srcDoc={previewHtml} className="w-full h-full bg-white rounded-xl shadow-2xl"></iframe>
             </div>
           </div>
         )

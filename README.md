@@ -11,25 +11,35 @@ Powered by **Google's Gemini 2.5 Flash** and **Groq (Llama 3)**, ForgeUI bridges
 ### ✨ Create Mode
 - **Instant Code Generation**: Just describe what you want (e.g., "A modern pricing card with glassmorphism"), and ForgeUI generates the full code instantly.
 - **Multi-Model Support**: Choose between **Google Gemini** (for creative layouts) or **Groq Llama 3** (for lightning-fast speed).
-- **Framework Flexibility**: Generate code for **React + Tailwind**, **HTML + CSS**, **Bootstrap**, and more.
-- **AI Prompt Enhancer**: Stuck on a simple idea? Click "Enhance with AI" to let the system rewrite your prompt into a detailed, professional design spec.
+- **Framework Flexibility**: 
+    - **React + Tailwind**: Generates `.tsx` components with `index.ts` exports.
+    - **HTML + CSS + JS**: Automatically splits code into `index.html`, `styles.css`, and `script.js`.
+    - **HTML + Bootstrap**: Includes CDN links automatically.
+- **AI Prompt Enhancer**: Click "Enhance with AI" to transform simple ideas into professional design specs.
 
 ### 🛠️ Improve Mode
-- **AI Code Refinement**: Paste your existing (or generated) code and let AI improve it.
+- **AI Code Refinement**: Paste existing code and let AI optimize it.
 - **One-Click Actions**:
   - **Optimize Tailwind**: Deduplicate classes and fix conflicts.
   - **Accessibility**: Add ARIA labels and fix contrast issues.
   - **Dark Mode**: Automatically add Tailwind `dark:` classes.
-  - **Animations**: Add smooth entry animations and micro-interactions.
+  - **Animations**: Add smooth entry animations.
   - **Refactor**: Clean up indentation and structure.
-- **Diff View**: Compare the original and improved code side-by-side.
+- **Diff View**: Compare original vs. improved code side-by-side.
+
+### 📚 Component Library
+- **Virtual Filesystem**: Save components locally using IndexedDB.
+- **Format-Aware Saving**:
+    - **React**: Saves raw source code, ensuring no HTML leakage.
+    - **HTML**: Preserves full structure.
+- **Smart ZIP Export**: Download your components as structured ZIP files with auto-generated READMEs tailored to your framework.
+- **Management**: Organize, view, edit, and delete components directly from the app.
 
 ### 🌟 Core Experience
-- **Minimalist Aesthetic**: A polished, dark-mode workspace designed with glassmorphism effects and clean typography.
-- **Live Preview**: See your generated components come to life immediately in an interactive sandbox.
-- **History Tracker**: Automatically saves your generations to local storage. Access them anytime from the history sidebar.
-- **Export Options**: Copy code to clipboard or download as a standalone HTML file.
-- **Fully Responsive**: All generated components are mobile-friendly and modern by default.
+- **Minimalist Aesthetic**: polished dark-mode workspace.
+- **Live Preview**: Interactive sandbox for checking responsiveness.
+- **History Tracker**: Auto-saves your session history.
+- **Offline Capable**: Your library lives in your browser.
 
 ---
 
@@ -37,19 +47,16 @@ Powered by **Google's Gemini 2.5 Flash** and **Groq (Llama 3)**, ForgeUI bridges
 
 - **Frontend**: [React 18](https://reactjs.org/) + [Vite](https://vitejs.dev/)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-- **State Management**: React Hooks (useState, useEffect)
+- **State Management**: React Hooks + IndexedDB (idb)
 - **AI Integration**:
-  - [Google Generative AI SDK](https://www.npmjs.com/package/@google/generative-ai)
-  - [Groq SDK](https://www.npmjs.com/package/groq-sdk)
+  - [Google Generative AI](https://ai.google.dev/)
+  - [Groq SDK](https://groq.com/)
 - **Code Editor**: [Monaco Editor](https://microsoft.github.io/monaco-editor/)
-- **Animations**: [Framer Motion](https://www.framer.com/motion/)
 - **Icons**: [React Icons (Io5)](https://react-icons.github.io/react-icons/)
 
 ---
 
 ## 📦 Installation & Setup
-
-Follow these steps to run ForgeUI locally on your machine.
 
 ### 1. Clone the Repository
 ```bash
@@ -63,36 +70,39 @@ npm install
 ```
 
 ### 3. Configure Environment Variables
-Create a `.env` file in the root directory and add your API keys:
+Create a `.env` file in the root directory:
 ```env
-VITE_GEMINI_API_KEY=your_gemini_api_key_here
-VITE_GROQ_API_KEY=your_groq_api_key_here
+VITE_GEMINI_API_KEY=your_gemini_api_key
+VITE_GROQ_API_KEY=your_groq_api_key
 ```
-> **Note:**
-> - Get Gemini key from [Google AI Studio](https://aistudio.google.com/).
-> - Get Groq key from [Groq Console](https://console.groq.com/).
 
 ### 4. Run the Development Server
 ```bash
 npm run dev
 ```
-Open your browser and navigate to `http://localhost:5173/`.
+Open `http://localhost:5173/` in your browser.
 
 ---
 
 ## 🎮 How to Use
 
-### Generating New Components
-1. **Select Settings**: Choose your preferred AI model (Gemini/Groq) and Output Framework (e.g., React + Tailwind).
-2. **Describe Your Vision**: Type a prompt like *"A login form with a gradient button"* into the text box.
-3. **Enhance (Optional)**: Click **✨ Enhance with AI** to rewrite your prompt for better results.
-4. **Generate**: Click the generate button and watch the magic happen.
+### Generating Components
+1. **Select Framework**: Choose `React + Tailwind`, `HTML + CSS`, etc.
+2. **Describe**: Type a prompt (e.g., *"A login form with a gradient button"*).
+3. **Generate**: Watch the AI build your UI in seconds.
 
-### Improving Existing Code
-1. Switch to **🛠️ Improve Existing** mode.
-2. Paste your HTML/React code into the editor.
-3. Select an improvement action (e.g., "Optimize Tailwind", "Add Dark Mode") or type a custom instruction.
-4. View the changes in the **Diff View** or **Preview** tab.
+### Saving & Exporting
+- **Save to Library**: Click the Save icon to store it in your local library.
+- **Export ZIP**: Download the component package.
+    - React components include `.tsx` and `index.ts`.
+    - HTML components include `index.html` (and `css/js` files if applicable).
+    - A custom `README.md` is included in every ZIP.
+
+### Managing Library
+- Go to the **Library** tab.
+- Browse your saved components in the file explorer.
+- Edit code directly in the browser.
+- **Delete** unwanted components using the trash icon.
 
 ---
 

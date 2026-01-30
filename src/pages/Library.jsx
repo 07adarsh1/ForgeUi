@@ -4,7 +4,7 @@ import FileExplorer from '../components/library/FileExplorer';
 import LibraryEditor from '../components/library/LibraryEditor';
 import { libraryService } from '../lib/db';
 import { toast } from 'react-toastify';
-import { IoSaveOutline, IoDownloadOutline } from 'react-icons/io5';
+import { IoSaveOutline, IoDownloadOutline, IoTrashOutline } from 'react-icons/io5';
 import { exportComponentAsZip } from '../lib/export';
 import { ClipLoader } from 'react-spinners';
 
@@ -14,6 +14,7 @@ const Library = () => {
     const [editorContent, setEditorContent] = useState("");
     const [isLoading, setIsLoading] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
+    const [deleteModal, setDeleteModal] = useState({ isOpen: false, componentId: null });
     const [isUnsaved, setIsUnsaved] = useState(false);
 
     useEffect(() => {
@@ -96,6 +97,30 @@ const Library = () => {
         }
     };
 
+    const handleDeleteClick = (componentId) => {
+        setDeleteModal({ isOpen: true, componentId });
+    };
+
+    const confirmDelete = async () => {
+        const { componentId } = deleteModal;
+        if (!componentId) return;
+
+        try {
+            await libraryService.deleteComponent(componentId);
+            setComponents(prev => prev.filter(c => c.id !== componentId));
+            if (selectedFile?.componentId === componentId) {
+                setSelectedFile(null);
+                setEditorContent("");
+            }
+            toast.success("Component deleted");
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to delete component");
+        } finally {
+            setDeleteModal({ isOpen: false, componentId: null });
+        }
+    };
+
     // Keyboard shortcut for saving
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -109,16 +134,17 @@ const Library = () => {
     }, [selectedFile, editorContent]);
 
     return (
-        <div className="flex flex-col h-screen bg-black text-white overflow-hidden">
+        <div className="flex flex-col h-screen bg-[#09090b] text-white overflow-hidden">
             <Navbar />
 
             <div className="flex-1 flex overflow-hidden">
                 {/* Left Sidebar: File Explorer */}
-                <div className="w-64 flex-shrink-0 border-r border-white/10 bg-[#18181b]">
+                <div className="w-64 flex-shrink-0 border-r border-white/10 bg-[#09090b]/50 backdrop-blur-xl">
                     <FileExplorer
                         components={components}
                         onSelectFile={handleFileSelect}
                         selectedFile={selectedFile?.path}
+                        onDeleteComponent={handleDeleteClick}
                     />
                 </div>
 
@@ -146,6 +172,13 @@ const Library = () => {
                                 >
                                     <IoSaveOutline /> Save
                                 </button>
+                                <button
+                                    onClick={() => handleDeleteClick(selectedFile.componentId)}
+                                    className="text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 text-xs"
+                                    title="Delete Component"
+                                >
+                                    <IoTrashOutline /> Delete
+                                </button>
                             </div>
                         )}
                     </div>
@@ -160,6 +193,32 @@ const Library = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {deleteModal.isOpen && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-200">
+                    <div className="bg-[#1e1e1e] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl scale-100">
+                        <h3 className="text-lg font-bold text-white mb-2">Delete Component?</h3>
+                        <p className="text-gray-400 text-sm mb-6">
+                            Are you sure you want to delete this component? This action cannot be undone.
+                        </p>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => setDeleteModal({ isOpen: false, componentId: null })}
+                                className="px-4 py-2 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                className="px-4 py-2 rounded-lg text-sm bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all font-medium"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
