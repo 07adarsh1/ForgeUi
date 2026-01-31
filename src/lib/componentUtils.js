@@ -15,12 +15,22 @@ export const extractCode = (response) => {
  * @param {string} folderName - The unique folder identifier.
  * @param {string} prompt - The original prompt used.
  * @param {string} timestamp - Creation timestamp.
+ * @param {string} customName - (Optional) User defined component name.
+ * @param {string} customTags - (Optional) User defined comma separated tags.
  * @returns {Object} - The full component object structure ready for saving.
  */
-export const prepareComponentForSave = (code, framework, folderName, prompt, timestamp) => {
-    const nameGuess = (prompt || "Untitled Component").split(' ').slice(0, 3).join(' ');
+export const prepareComponentForSave = (code, framework, folderName, prompt, timestamp, customName = null, customTags = "") => {
+    const nameGuess = customName || (prompt || "Untitled Component").split(' ').slice(0, 3).join(' ');
     const componentName = folderName.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('');
     const isReact = framework === 'react-tailwind';
+
+    // Process Tags
+    const frameworkTag = getTagLabel(framework);
+    const typeTag = isReact ? 'React' : 'HTML';
+    const userTags = customTags ? customTags.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+    // Ensure unique tags
+    const finalTags = [...new Set([frameworkTag, typeTag, ...userTags])];
 
     // Base object
     const component = {
@@ -28,7 +38,8 @@ export const prepareComponentForSave = (code, framework, folderName, prompt, tim
         files: {
             "meta.json": JSON.stringify({
                 name: nameGuess,
-                tags: [getTagLabel(framework), isReact ? 'React' : 'HTML'],
+                tags: finalTags,
+                format: framework,
                 createdAt: timestamp
             }, null, 2),
             "preview.json": JSON.stringify({

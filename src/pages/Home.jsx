@@ -1,22 +1,21 @@
 import React, { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar'
 import HistorySidebar from '../components/HistorySidebar'
-import Select from 'react-select';
-// Using only Io5 icons for consistency
-import {
-  IoSparkles, IoCodeSlash, IoClose, IoCopyOutline, IoDownloadOutline,
-  IoOpenOutline, IoRefresh, IoSpeedometer, IoAccessibility,
-  IoMoon, IoScan, IoGitCompare, IoSaveOutline
-} from 'react-icons/io5';
 import { libraryService } from '../lib/db';
 import { generatePreviewHtml } from '../lib/preview';
-import Editor, { DiffEditor } from '@monaco-editor/react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { ClipLoader } from 'react-spinners';
 import { toast } from 'react-toastify';
 import Groq from "groq-sdk";
-import { getCreationPrompt, getEnhancementPrompt, getImprovementPrompt } from '../lib/prompts';
+import { getCreationPrompt, getImprovementPrompt } from '../lib/prompts';
 import { extractCode, prepareComponentForSave } from '../lib/componentUtils';
+import { buildEnhancementPrompt } from '../lib/promptEnhancer';
+import SaveModal from '../components/SaveModal';
+import { IoClose, IoSparkles, IoSpeedometer, IoCodeSlash } from 'react-icons/io5';
+
+// Subcomponents
+import CreateInput from '../components/home/CreateInput';
+import ImproveInput from '../components/home/ImproveInput';
+import OutputDisplay from '../components/home/OutputDisplay';
 
 const Home = () => {
 
@@ -39,6 +38,7 @@ const Home = () => {
   const [loading, setLoading] = useState(false);
   const [isNewTabOpen, setIsNewTabOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // 'Create' Mode State
@@ -125,7 +125,7 @@ const Home = () => {
 
     try {
       setEnhancing(true);
-      const promptImprovement = getEnhancementPrompt(prompt);
+      const promptImprovement = buildEnhancementPrompt(prompt, frameWork.value);
 
       const enhancedText = (await generateWithAI(promptImprovement)).trim();
       setPrompt(enhancedText);
@@ -142,7 +142,6 @@ const Home = () => {
     if (!prompt.trim()) return toast.error("Please describe your component first");
 
     try {
-      setLoading(true);
       setLoading(true);
       const promptText = getCreationPrompt(frameWork.value, prompt);
 
@@ -171,22 +170,12 @@ const Home = () => {
 
   // --- Improve Mode Logic ---
 
-  const improveActions = [
-    { label: "Optimize Tailwind", icon: <IoSpeedometer />, prompt: "Optimize the Tailwind CSS classes. Remove duplicates, order them logically, and use shorter utility equivalents. Keep design identical." },
-    { label: "Accessibility", icon: <IoAccessibility />, prompt: "Enhance accessibility. Add ARIA labels, ensure proper semantic HTML, and fix color contrast issues." },
-    { label: "Dark Mode", icon: <IoMoon />, prompt: "Add Dark Mode support using Tailwind's 'dark:' modifier. Ensure it looks premium in both modes." },
-    { label: "Add Animations", icon: <IoSparkles />, prompt: "Add subtle, high-quality micro-interactions and entry animations using Tailwind 'transition' or 'animate' classes." },
-    { label: "Refactor", icon: <IoScan />, prompt: "Refactor code for readability, better indentation, and cleaner structure. Do not change functionality." },
-  ];
-
   async function handleImprovement(actionPrompt) {
     const codeToRefine = mode === 'create' ? generatedCode : inputCode;
     if (!codeToRefine.trim()) return toast.error("No code to refine");
 
     try {
       setLoading(true);
-      if (mode === 'improve') setImprovedCode("");
-
       if (mode === 'improve') setImprovedCode("");
 
       const userInstruction = actionPrompt === 'custom' ? customImprovePrompt : actionPrompt;
@@ -212,13 +201,19 @@ const Home = () => {
     }
   }
 
-  const saveToLibrary = async () => {
+  const openSaveModal = () => {
+    const codeToSave = mode === 'create' ? generatedCode : improvedCode;
+    if (!codeToSave) return;
+    setIsSaveModalOpen(true);
+  };
+
+  const confirmSave = async (customName, customTags) => {
     const codeToSave = mode === 'create' ? generatedCode : improvedCode;
     if (!codeToSave) return;
 
     try {
-      const nameGuess = (prompt || "Untitled Component").split(' ').slice(0, 3).join(' ');
-      let folderName = nameGuess.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      // Generate folder name from CUSTOM NAME, not prompt
+      let folderName = customName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       if (!folderName) folderName = "component";
 
       // Ensure unique folder name
@@ -239,12 +234,13 @@ const Home = () => {
         return;
       }
 
-      const newComponent = prepareComponentForSave(codeToSave, frameWork.value, uniqueFolderName, prompt, timestamp);
-      // We need to inject the ID manually since helper doesn't generate it
+      // Pass customName and customTags to helper
+      const newComponent = prepareComponentForSave(codeToSave, frameWork.value, uniqueFolderName, prompt, timestamp, customName, customTags);
       newComponent.id = id;
 
       await libraryService.saveComponent(newComponent);
       toast.success("Saved to Library 📚");
+      setIsSaveModalOpen(false);
     } catch (error) {
       console.error(error);
       toast.error("Failed to save to library");
@@ -356,287 +352,65 @@ const Home = () => {
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl flex flex-col h-full shadow-2xl flex-1 relative overflow-hidden">
 
             {mode === 'create' ? (
-              // CREATE MODE INPUT
-              <>
-                <div className="mb-6">
-                  <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                    Create.
-                  </h2>
-                  <p className="text-gray-400 mt-2 font-light">
-                    Describe your vision. Instant UI generation.
-                  </p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                  <div className="flex-1 flex flex-col gap-2">
-                    <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold ml-1">AI Model</label>
-                    <Select
-                      options={aiOptions}
-                      value={modelProvider}
-                      styles={customSelectStyles}
-                      components={{ IndicatorSeparator: () => null }}
-                      onChange={(selected) => setModelProvider(selected)}
-                    />
-                  </div>
-                  <div className="flex-1 flex flex-col gap-2">
-                    <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold ml-1">Framework</label>
-                    <Select
-                      options={options}
-                      value={frameWork}
-                      styles={customSelectStyles}
-                      components={{ IndicatorSeparator: () => null }}
-                      onChange={(selected) => setFrameWork(selected)}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex-1 flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold ml-1">Prompt</label>
-                    <button
-                      onClick={enhancePrompt}
-                      disabled={enhancing || !prompt.trim()}
-                      className="text-xs flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {enhancing ? <ClipLoader size={10} color="#c084fc" /> : <IoSparkles />}
-                      {enhancing ? "Enhancing..." : "Enhance with AI"}
-                    </button>
-                  </div>
-                  <textarea
-                    onChange={(e) => setPrompt(e.target.value)}
-                    value={prompt}
-                    className="w-full h-40 bg-white/5 border border-white/5 rounded-2xl p-4 text-white placeholder-gray-600 outline-none focus:bg-white/10 focus:border-white/20 transition-all resize-none font-light leading-relaxed"
-                    placeholder="e.g. A minimalist pricing card with glassmorphism effect..."
-                  ></textarea>
-                </div>
-
-                <button
-                  onClick={getResponse}
-                  disabled={loading}
-                  className="mt-6 w-full py-4 rounded-xl font-medium text-black bg-white hover:bg-gray-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading && !generatedCode ? <ClipLoader color='#000' size={20} /> : <IoSparkles className="text-lg" />}
-                  {loading && !generatedCode ? "Generating..." : "Generate Component"}
-                </button>
-
-                {outputScreen && (
-                  <div className="mt-8 pt-6 border-t border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold ml-1">Refine Result</label>
-                      <button
-                        onClick={() => handleImprovement('custom')}
-                        disabled={loading || !customImprovePrompt.trim()}
-                        className="text-xs flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50"
-                      >
-                        {loading && generatedCode ? <ClipLoader size={10} color="#c084fc" /> : <IoSparkles />} Apply Changes
-                      </button>
-                    </div>
-                    <textarea
-                      value={customImprovePrompt}
-                      onChange={(e) => setCustomImprovePrompt(e.target.value)}
-                      placeholder="e.g. Make the background darker, add rounded corners..."
-                      className="w-full h-20 bg-white/5 border border-white/5 rounded-xl p-3 text-sm text-white placeholder-gray-600 outline-none focus:bg-white/10 focus:border-white/20 transition-all resize-none font-light"
-                    />
-                  </div>
-                )}
-              </>
+              <CreateInput
+                modelProvider={modelProvider}
+                setModelProvider={setModelProvider}
+                frameWork={frameWork}
+                setFrameWork={setFrameWork}
+                prompt={prompt}
+                setPrompt={setPrompt}
+                aiOptions={aiOptions}
+                frameworkOptions={options}
+                customSelectStyles={customSelectStyles}
+                enhancePrompt={enhancePrompt}
+                enhancing={enhancing}
+                getResponse={getResponse}
+                loading={loading}
+                generatedCode={generatedCode}
+                outputScreen={outputScreen}
+                customImprovePrompt={customImprovePrompt}
+                setCustomImprovePrompt={setCustomImprovePrompt}
+                handleImprovement={handleImprovement}
+              />
             ) : (
-              // IMPROVE MODE INPUT
-              <>
-                <div className="mb-4">
-                  <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                    Refine.
-                  </h2>
-                  <p className="text-gray-400 mt-2 font-light">
-                    Paste your code. Choose an enhancement.
-                  </p>
-                </div>
-
-                <div className="flex-1 rounded-xl overflow-hidden border border-white/5 mb-4 max-h-[300px]">
-                  <Editor
-                    height="100%"
-                    defaultLanguage="html"
-                    theme="vs-dark"
-                    value={inputCode}
-                    onChange={(val) => setInputCode(val)}
-                    options={{
-                      minimap: { enabled: false },
-                      fontSize: 13,
-                      padding: { top: 16 },
-                      fontFamily: "'JetBrains Mono', monospace",
-                    }}
-                  />
-                </div>
-
-                <div className="mb-4 flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs uppercase tracking-wider text-gray-500 font-semibold ml-1">Custom Improvement</label>
-                    <button
-                      onClick={() => handleImprovement('custom')}
-                      disabled={loading || !customImprovePrompt.trim() || !inputCode.trim()}
-                      className="text-xs flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50"
-                    >
-                      <IoSparkles /> Apply Custom
-                    </button>
-                  </div>
-                  <textarea
-                    value={customImprovePrompt}
-                    onChange={(e) => setCustomImprovePrompt(e.target.value)}
-                    placeholder="e.g. Change the background to blue, add a footer..."
-                    className="w-full h-24 bg-white/5 border border-white/5 rounded-xl p-3 text-sm text-white placeholder-gray-600 outline-none focus:bg-white/10 focus:border-white/20 transition-all resize-none font-light"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  {improveActions.map((action, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleImprovement(action.prompt)}
-                      disabled={loading || !inputCode.trim()}
-                      className="flex items-center gap-2 p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all text-xs text-gray-300 hover:text-white text-left disabled:opacity-50"
-                    >
-                      <span className="text-lg text-purple-400">{action.icon}</span>
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-
-                {loading && (
-                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-10 rounded-3xl">
-                    <ClipLoader color="#fff" size={40} />
-                    <p className="text-white mt-4 font-medium animate-pulse">Refining your code...</p>
-                  </div>
-                )}
-              </>
+              <ImproveInput
+                inputCode={inputCode}
+                setInputCode={setInputCode}
+                customImprovePrompt={customImprovePrompt}
+                setCustomImprovePrompt={setCustomImprovePrompt}
+                handleImprovement={handleImprovement}
+                loading={loading}
+              />
             )}
 
           </div>
         </div>
 
         {/* --- RIGHT COLUMN: OUTPUT --- */}
-        {/* Visible on Mobile if mobileTab is 'preview' or 'code', always visible on desktop */}
-        <div className={`lg:col-span-7 h-[calc(100vh-200px)] lg:h-auto bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden flex flex-col shadow-2xl ${mobileTab === 'create' ? 'hidden md:flex' : 'flex'}`}>
+        <OutputDisplay
+          mode={mode}
+          mobileTab={mobileTab}
+          setMobileTab={setMobileTab}
+          outputScreen={outputScreen}
+          generatedCode={generatedCode}
+          previewHtml={previewHtml}
+          tab={tab}
+          setTab={setTab}
+          loading={loading}
+          copyCode={copyCode}
+          downloadFile={downloadFile}
+          openSaveModal={openSaveModal}
+          refreshKey={refreshKey}
+          setRefreshKey={setRefreshKey}
+          setIsNewTabOpen={setIsNewTabOpen}
+          improvedCode={improvedCode}
+          inputCode={inputCode}
+          improveTab={improveTab}
+          setImproveTab={setImproveTab}
+          frameWorkValue={frameWork.value}
+        />
 
-          {/* Mobile Tab Header (Preview vs Code switcher for when not in Create mode) */}
-          <div className="md:hidden flex h-12 bg-white/5 border-b border-white/10">
-            <button
-              onClick={() => setMobileTab('code')}
-              className={`flex-1 text-xs font-bold uppercase tracking-wider ${mobileTab === 'code' ? 'text-white bg-white/10' : 'text-gray-500'}`}
-            >
-              Code
-            </button>
-            <button
-              onClick={() => setMobileTab('preview')}
-              className={`flex-1 text-xs font-bold uppercase tracking-wider ${mobileTab === 'preview' ? 'text-white bg-white/10' : 'text-gray-500'}`}
-            >
-              Preview
-            </button>
-          </div>
-
-          {/* Conditional Rendering based on Mode */}
-          {mode === 'create' ? (
-            // CREATE MODE OUTPUT
-            !outputScreen ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-gray-600">
-                <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
-                  <IoCodeSlash className="text-3xl opacity-50" />
-                </div>
-                <p className="font-light">Generated code will appear here.</p>
-              </div>
-            ) : (
-              <>
-                <div className="h-14 border-b border-white/10 flex items-center justify-between px-6 bg-white/5">
-                  <div className="flex items-center gap-1 bg-black/20 p-1 rounded-lg">
-                    <button onClick={() => setTab(1)} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${tab === 1 ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}>Code</button>
-                    <button onClick={() => setTab(2)} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${tab === 2 ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}>Preview</button>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button onClick={copyCode} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Copy"><IoCopyOutline /></button>
-                    <button onClick={downloadFile} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Download"><IoDownloadOutline /></button>
-                    <button onClick={saveToLibrary} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Save to Library"><IoSaveOutline /></button>
-
-                    {tab === 2 && (
-                      <>
-                        <div className="w-px h-4 bg-white/10 mx-1"></div>
-                        <button onClick={() => setRefreshKey(p => p + 1)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Refresh"><IoRefresh /></button>
-                        <button onClick={() => setIsNewTabOpen(true)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Expand"><IoOpenOutline /></button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="flex-1 relative">
-                  {loading && generatedCode && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-10">
-                      <ClipLoader color="#fff" size={40} />
-                      <p className="text-white mt-4 font-medium animate-pulse">Refining with AI...</p>
-                    </div>
-                  )}
-                  {tab === 1 ? (
-                    <Editor value={generatedCode} height="100%" theme='vs-dark' language={frameWork.value === 'react-tailwind' ? 'typescript' : 'html'} options={{ minimap: { enabled: false }, fontSize: 14, padding: { top: 20 }, fontFamily: "'JetBrains Mono', monospace" }} />
-                  ) : (
-                    <iframe key={refreshKey} srcDoc={previewHtml} className="w-full h-full bg-white" title="preview" />
-                  )}
-                </div>
-              </>
-            )
-          ) : (
-            // IMPROVE MODE OUTPUT
-            !improvedCode ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-gray-600">
-                <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
-                  <IoSparkles className="text-3xl opacity-50" />
-                </div>
-                <p className="font-light">Improved code will appear here.</p>
-              </div>
-            ) : (
-              <>
-                <div className="h-14 border-b border-white/10 flex items-center justify-between px-6 bg-white/5">
-                  <div className="flex items-center gap-1 bg-black/20 p-1 rounded-lg">
-                    <button onClick={() => setImproveTab('diff')} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${improveTab === 'diff' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}>Diff View</button>
-                    <button onClick={() => setImproveTab('code')} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${improveTab === 'code' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}>Code</button>
-                    <button onClick={() => setImproveTab('preview')} className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${improveTab === 'preview' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}>Preview</button>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button onClick={copyCode} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Copy"><IoCopyOutline /></button>
-                    <button onClick={downloadFile} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Download"><IoDownloadOutline /></button>
-                    <button onClick={saveToLibrary} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10" title="Save to Library"><IoSaveOutline /></button>
-                  </div>
-                </div>
-                <div className="flex-1 relative">
-                  {improveTab === 'diff' && (
-                    <DiffEditor
-                      original={inputCode}
-                      modified={improvedCode}
-                      height="100%"
-                      theme="vs-dark"
-                      language="html"
-                      options={{
-                        fontSize: 14,
-                        renderSideBySide: true,
-                        padding: { top: 20 },
-                        fontFamily: "'JetBrains Mono', monospace"
-                      }}
-                    />
-                  )}
-                  {improveTab === 'code' && (
-                    <Editor
-                      value={improvedCode}
-                      height="100%"
-                      theme='vs-dark'
-                      language={frameWork.value === 'react-tailwind' ? 'typescript' : 'html'}
-                      options={{ minimap: { enabled: false }, fontSize: 14, padding: { top: 20 }, fontFamily: "'JetBrains Mono', monospace" }}
-                    />
-                  )}
-                  {improveTab === 'preview' && (
-                    <iframe srcDoc={generatePreviewHtml(improvedCode, frameWork.value)} className="w-full h-full bg-white" title="preview" />
-                  )}
-                </div>
-              </>
-            )
-          )}
-        </div>
-
-      </div >
+      </div>
 
       {/* Fullscreen Modal (Create Mode Only) */}
       {
@@ -680,8 +454,17 @@ const Home = () => {
         </button>
       </div>
 
+      <SaveModal
+        isOpen={isSaveModalOpen}
+        onClose={() => setIsSaveModalOpen(false)}
+        onSave={confirmSave}
+        initialName={(prompt || "Untitled Component").split(' ').slice(0, 3).join(' ')}
+      />
+
     </>
   )
-}
+};
 
 export default Home
+
+

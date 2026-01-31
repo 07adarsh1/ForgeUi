@@ -94,8 +94,19 @@ const FileExplorer = ({ components, onSelectFile, selectedFile, onRefresh, onDel
         const root = [];
 
         components.forEach((comp) => {
+            // Extract display name from meta.json if available
+            let displayName = comp.folderName;
+            try {
+                if (comp.files["meta.json"]) {
+                    const meta = JSON.parse(comp.files["meta.json"]);
+                    if (meta.name) displayName = meta.name;
+                }
+            } catch (e) {
+                console.warn("Failed to parse meta.json for", comp.folderName);
+            }
+
             const rootFolder = {
-                name: comp.folderName,
+                name: displayName,
                 path: comp.folderName,
                 type: 'folder',
                 componentId: comp.id,

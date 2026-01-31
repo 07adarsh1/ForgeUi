@@ -1,6 +1,6 @@
 export const getCreationPrompt = (framework, userPrompt) => {
-    if (framework === 'react-tailwind') {
-        return `
+  if (framework === 'react-tailwind') {
+    return `
       You are an expert React developer.
       
       **Task:** Generate a single React functional component for: "${userPrompt}"
@@ -16,10 +16,10 @@ export const getCreationPrompt = (framework, userPrompt) => {
       4. **Icons:** Use FontAwesome classes (e.g. \`<i className="fa-solid fa-home"></i>\`).
       5. **Output:** Return ONLY the code inside a markdown block.
     `;
-    }
+  }
 
-    if (framework === 'html-css-js') {
-        return `
+  if (framework === 'html-css-js') {
+    return `
       You are an expert frontend developer.
       
       **Task:** Generate a complete component for: "${userPrompt}" using HTML, CSS, and JavaScript.
@@ -33,10 +33,10 @@ export const getCreationPrompt = (framework, userPrompt) => {
       3. **Icons:** Use FontAwesome.
       4. **Output:** Return ONLY the raw HTML code inside a markdown code block.
     `;
-    }
+  }
 
-    if (framework === 'html-bootstrap') {
-        return `
+  if (framework === 'html-bootstrap') {
+    return `
       You are an expert frontend developer.
       
       **Task:** Generate a single HTML file for: "${userPrompt}" using the Bootstrap Framework.
@@ -49,10 +49,10 @@ export const getCreationPrompt = (framework, userPrompt) => {
       3. **Design:** Modern, minimalist, utilizing Bootstrap classes effectively.
       4. **Output:** Return ONLY the raw HTML code inside a markdown code block.
     `;
-    }
+  }
 
-    // Default: HTML + Tailwind or Plain CSS
-    return `
+  // Default: HTML + Tailwind or Plain CSS
+  return `
       You are an expert frontend developer.
       
       **Task:** Generate a single HTML file for: "${userPrompt}"
@@ -70,17 +70,10 @@ export const getCreationPrompt = (framework, userPrompt) => {
   `;
 };
 
-export const getEnhancementPrompt = (userPrompt) => {
-    return `
-    Act as a senior UI/UX Designer. Rewrite the following user prompt to be detailed, professional, and focused on modern, high-quality aesthetics (Glassmorphism, clean layout, good typography).
-    User Prompt: "${userPrompt}"
-    
-    Return ONLY the refined prompt text, nothing else.
-  `;
-};
+
 
 export const getImprovementPrompt = (task, code) => {
-    return `
+  return `
     You are an expert code refactorer.
     
     **Task:** ${task}
