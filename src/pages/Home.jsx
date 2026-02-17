@@ -32,7 +32,7 @@ const Home = () => {
   ];
 
   const aiOptions = [
-    { value: 'gemini', label: 'Gemini 1.5 Pro' },
+    { value: 'gemini', label: 'Gemini 1.5 Flash' },
     { value: 'groq', label: 'Groq (Llama 3)' }
   ];
 
@@ -112,7 +112,7 @@ const Home = () => {
 
   async function generateWithAI(promptText) {
     if (modelProvider.value === 'gemini') {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const result = await model.generateContent(promptText);
       return result.response.text();
     } else {
@@ -190,7 +190,7 @@ const Home = () => {
       const mimeType = file.type;
 
       // Call Gemini Vision
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const promptText = getVisionAnalysisPrompt();
       const imagePart = {
