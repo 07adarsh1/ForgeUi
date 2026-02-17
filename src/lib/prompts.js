@@ -72,6 +72,7 @@ export const getCreationPrompt = (framework, userPrompt) => {
 
 
 
+
 export const getImprovementPrompt = (task, code) => {
   return `
     You are an expert code refactorer.
@@ -85,4 +86,25 @@ export const getImprovementPrompt = (task, code) => {
     
     **Output:** Return ONLY the full improved code inside a markdown code block. Do not add explanations.
   `;
+};
+
+export const getVisionAnalysisPrompt = () => {
+  return `Analyze this UI screenshot and return structured JSON describing:
+- Page type
+- Sections
+- Layout type per section
+- Elements per section (heading, paragraph, button, image, grid, etc.)
+Return valid JSON only.
+
+Example Response:
+{
+  "type": "landing-page",
+  "sections": [
+    {
+      "type": "hero",
+      "layout": "two-column",
+      "elements": ["heading", "paragraph", "button", "image"]
+    }
+  ]
+}`;
 };

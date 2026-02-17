@@ -16,6 +16,9 @@ import { IoClose, IoSparkles, IoSpeedometer, IoCodeSlash } from 'react-icons/io5
 import CreateInput from '../components/home/CreateInput';
 import ImproveInput from '../components/home/ImproveInput';
 import OutputDisplay from '../components/home/OutputDisplay';
+import ScreenshotInput from '../components/home/ScreenshotInput';
+import { getVisionAnalysisPrompt } from '../lib/prompts';
+import { renderFromLayoutSpec } from '../lib/layoutEngine';
 
 const Home = () => {
 
@@ -49,7 +52,10 @@ const Home = () => {
   const [previewHtml, setPreviewHtml] = useState("");
   const [outputScreen, setOutputScreen] = useState(false);
   const [tab, setTab] = useState(1);
-  const [enhancing, setEnhancing] = useState(false);
+  const [enhancementLoading, setEnhancementLoading] = useState(false);
+
+  // 'Screenshot' Mode State
+  const [screenshotMode, setScreenshotMode] = useState(false);
 
   // 'Improve' Mode State
   const [inputCode, setInputCode] = useState("");
@@ -124,7 +130,7 @@ const Home = () => {
     if (!prompt.trim()) return toast.info("Please enter a basic prompt first");
 
     try {
-      setEnhancing(true);
+      setEnhancementLoading(true);
       const promptImprovement = buildEnhancementPrompt(prompt, frameWork.value);
 
       const enhancedText = (await generateWithAI(promptImprovement)).trim();
@@ -134,7 +140,7 @@ const Home = () => {
       console.error(error);
       toast.error("Failed to enhance prompt");
     } finally {
-      setEnhancing(false);
+      setEnhancementLoading(false);
     }
   };
 
@@ -167,6 +173,71 @@ const Home = () => {
       if (window.innerWidth < 768) setMobileTab('preview');
     }
   };
+
+  // --- Screenshot Mode Logic ---
+
+  async function handleScreenshotAnalysis(file) {
+    if (!file) return;
+
+    try {
+      setLoading(true);
+
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      await new Promise(resolve => reader.onload = resolve);
+      const base64Data = reader.result.split(',')[1];
+      const mimeType = file.type;
+
+      // Call Gemini Vision
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+        ]
+      });
+
+      const promptText = getVisionAnalysisPrompt();
+      const imagePart = {
+        inlineData: {
+          data: base64Data,
+          mimeType
+        }
+      };
+
+      const result = await model.generateContent([promptText, imagePart]);
+      const jsonResponse = result.response.text();
+
+      // Generate Layout Code
+      const generatedLayoutCode = renderFromLayoutSpec(jsonResponse);
+
+      if (!generatedLayoutCode) {
+        toast.error("Failed to generate layout from vision analysis");
+        return;
+      }
+
+      setGeneratedCode(generatedLayoutCode);
+
+      // Generate Preview
+      const preview = generatePreviewHtml(generatedLayoutCode, 'react-tailwind');
+      setPreviewHtml(preview);
+
+      addToHistory("Screenshot Analysis", generatedLayoutCode, 'react-tailwind');
+
+      setOutputScreen(true);
+      setTab(2); // Show Preview
+
+    } catch (error) {
+      console.error("Screenshot analysis failed:", error);
+      toast.error(`Analysis failed: ${error.message || "Unknown error"}`);
+    } finally {
+      setLoading(false);
+      if (window.innerWidth < 768) setMobileTab('preview');
+    }
+  }
 
   // --- Improve Mode Logic ---
 
@@ -339,13 +410,19 @@ const Home = () => {
               onClick={() => setMode('create')}
               className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${mode === 'create' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
             >
-              ✨ Create New
+              ✨ Create
+            </button>
+            <button
+              onClick={() => setMode('screenshot')}
+              className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${mode === 'screenshot' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+            >
+              📷 VisToUI
             </button>
             <button
               onClick={() => setMode('improve')}
               className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${mode === 'improve' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
             >
-              🛠️ Improve Existing
+              🛠️ Improve
             </button>
           </div>
 
@@ -363,7 +440,7 @@ const Home = () => {
                 frameworkOptions={options}
                 customSelectStyles={customSelectStyles}
                 enhancePrompt={enhancePrompt}
-                enhancing={enhancing}
+                enhancing={enhancementLoading} // Renamed state variable usage
                 getResponse={getResponse}
                 loading={loading}
                 generatedCode={generatedCode}
@@ -371,6 +448,11 @@ const Home = () => {
                 customImprovePrompt={customImprovePrompt}
                 setCustomImprovePrompt={setCustomImprovePrompt}
                 handleImprovement={handleImprovement}
+              />
+            ) : mode === 'screenshot' ? (
+              <ScreenshotInput
+                onAnalyze={handleScreenshotAnalysis}
+                loading={loading}
               />
             ) : (
               <ImproveInput
