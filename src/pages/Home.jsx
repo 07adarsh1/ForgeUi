@@ -189,27 +189,30 @@ const Home = () => {
       const base64Data = reader.result.split(',')[1];
       const mimeType = file.type;
 
-      // Call Gemini Vision
-      const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
-        safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-        ]
+      // Call Groq Vision (Llama 3.2 90b Vision, etc. if available, or just Llama 3.2 11b)
+      // Note: Make sure the model ID supports vision.
+      // Groq vision model ID: llama-3.2-11b-vision-preview or similar
+      const completion = await groq.chat.completions.create({
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: getVisionAnalysisPrompt() },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Data}`,
+                },
+              },
+            ],
+          },
+        ],
+        model: "llama-3.2-90b-vision-preview",
+        temperature: 0.2,
+        max_tokens: 1024,
       });
 
-      const promptText = getVisionAnalysisPrompt();
-      const imagePart = {
-        inlineData: {
-          data: base64Data,
-          mimeType
-        }
-      };
-
-      const result = await model.generateContent([promptText, imagePart]);
-      const jsonResponse = result.response.text();
+      const jsonResponse = completion.choices[0]?.message?.content || "";
 
       // Generate Layout Code
       const generatedLayoutCode = renderFromLayoutSpec(jsonResponse);
