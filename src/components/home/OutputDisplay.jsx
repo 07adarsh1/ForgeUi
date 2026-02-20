@@ -30,24 +30,8 @@ const OutputDisplay = ({
     return (
         <div className={`lg:col-span-7 h-[calc(100vh-200px)] lg:h-auto bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden flex flex-col shadow-2xl ${mobileTab === 'create' ? 'hidden md:flex' : 'flex'}`}>
 
-            {/* Mobile Tab Header */}
-            <div className="md:hidden flex h-12 bg-white/5 border-b border-white/10">
-                <button
-                    onClick={() => setMobileTab('code')}
-                    className={`flex-1 text-xs font-bold uppercase tracking-wider ${mobileTab === 'code' ? 'text-white bg-white/10' : 'text-gray-500'}`}
-                >
-                    Code
-                </button>
-                <button
-                    onClick={() => setMobileTab('preview')}
-                    className={`flex-1 text-xs font-bold uppercase tracking-wider ${mobileTab === 'preview' ? 'text-white bg-white/10' : 'text-gray-500'}`}
-                >
-                    Preview
-                </button>
-            </div>
-
             {/* CREATE MODE OUTPUT */}
-            {mode === 'create' ? (
+            {(mode === 'create' || mode === 'fullpage') ? (
                 !outputScreen ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-gray-600">
                         <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">

@@ -19,7 +19,7 @@ export const extractCode = (response) => {
  * @param {string} customTags - (Optional) User defined comma separated tags.
  * @returns {Object} - The full component object structure ready for saving.
  */
-export const prepareComponentForSave = (code, framework, folderName, prompt, timestamp, customName = null, customTags = "") => {
+export const prepareComponentForSave = (code, framework, folderName, prompt, timestamp, customName = null, customTags = "", mode = "create") => {
     const nameGuess = customName || (prompt || "Untitled Component").split(' ').slice(0, 3).join(' ');
     const componentName = folderName.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('');
     const isReact = framework === 'react-tailwind';
@@ -49,7 +49,22 @@ export const prepareComponentForSave = (code, framework, folderName, prompt, tim
         }
     };
 
-    if (isReact) {
+    if (isReact && mode === 'fullpage') {
+        component.files["page.tsx"] = code;
+
+        const sectionsMatch = code.match(/const (\w+) = function\(\) \{[\s\S]*?(?=\nconst \w+ = function|\nexport default function)/g);
+        if (sectionsMatch) {
+            sectionsMatch.forEach(sec => {
+                const nameMatch = sec.match(/const (\w+) =/);
+                if (nameMatch) {
+                    const compName = nameMatch[1];
+                    // Convert back to regular export function
+                    const cleanSec = sec.replace(`const ${compName} = function`, `export default function ${compName}`);
+                    component.files[`components/${compName}.tsx`] = `import React from 'react';\n\n${cleanSec}`;
+                }
+            });
+        }
+    } else if (isReact) {
         // React + Tailwind
         const fileName = `components/${componentName}.tsx`;
         component.files[fileName] = code;

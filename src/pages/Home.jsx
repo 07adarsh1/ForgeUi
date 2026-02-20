@@ -3,212 +3,97 @@ import Navbar from '../components/Navbar'
 import HistorySidebar from '../components/HistorySidebar'
 import { libraryService } from '../lib/db';
 import { generatePreviewHtml } from '../lib/preview';
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { toast } from 'react-toastify';
-import Groq from "groq-sdk";
-import { getCreationPrompt, getImprovementPrompt } from '../lib/prompts';
 import { extractCode, prepareComponentForSave } from '../lib/componentUtils';
-import { buildEnhancementPrompt } from '../lib/promptEnhancer';
 import SaveModal from '../components/SaveModal';
 import { IoClose, IoSparkles, IoSpeedometer, IoCodeSlash } from 'react-icons/io5';
+
+import { formOptions, aiOptions, themeOptions, densityOptions } from '../lib/constants';
+import { useHistory } from '../hooks/useHistory';
+import { useBlueprint } from '../hooks/useBlueprint';
+import { useAIAction } from '../hooks/useAIAction';
 
 // Subcomponents
 import CreateInput from '../components/home/CreateInput';
 import ImproveInput from '../components/home/ImproveInput';
 import OutputDisplay from '../components/home/OutputDisplay';
+import FullPageInput from '../components/home/FullPageInput';
+import EditSectionModal from '../components/home/EditSectionModal';
+import SectionPickerModal from '../components/home/SectionPickerModal';
 
 const Home = () => {
 
-  const options = [
-    { value: 'html-css', label: 'HTML + CSS' },
-    { value: 'html-tailwind', label: 'HTML + Tailwind' },
-    { value: 'html-bootstrap', label: 'HTML + Bootstrap' },
-    { value: 'html-css-js', label: 'HTML + CSS + JS' },
-    { value: 'react-tailwind', label: 'React + Tailwind' },
-    { value: 'html-tailwind-bootstrap', label: 'All Frameworks' },
-  ];
-
-  const aiOptions = [
-    { value: 'gemini', label: 'Gemini 2.5 Flash' },
-    { value: 'groq', label: 'Groq (Llama 3)' }
-  ];
-
   // Global State
-  const [mode, setMode] = useState('create'); // 'create' | 'improve'
-  const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState('create');
   const [isNewTabOpen, setIsNewTabOpen] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // 'Create' Mode State
   const [prompt, setPrompt] = useState("");
-  const [frameWork, setFrameWork] = useState(options[1]);
+  const [frameWork, setFrameWork] = useState(formOptions[1]);
   const [modelProvider, setModelProvider] = useState(aiOptions[0]);
   const [generatedCode, setGeneratedCode] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
   const [outputScreen, setOutputScreen] = useState(false);
   const [tab, setTab] = useState(1);
-  const [enhancing, setEnhancing] = useState(false);
+  const [themeOverride, setThemeOverride] = useState(themeOptions[0]);
+  const [densityOverride, setDensityOverride] = useState(densityOptions[0]);
 
   // 'Improve' Mode State
   const [inputCode, setInputCode] = useState("");
   const [improvedCode, setImprovedCode] = useState("");
-
-  const [improveTab, setImproveTab] = useState('diff'); // 'diff' | 'code' | 'preview'
+  const [improveTab, setImproveTab] = useState('diff');
   const [customImprovePrompt, setCustomImprovePrompt] = useState("");
 
-  // 🕒 History State
-  const [history, setHistory] = useState([]);
-
   // Mobile State
-  const [mobileTab, setMobileTab] = useState('create'); // 'create' | 'preview' | 'code'
+  const [mobileTab, setMobileTab] = useState('create');
 
-  useEffect(() => {
-    const savedHistory = localStorage.getItem('forgeui_history');
-    if (savedHistory) setHistory(JSON.parse(savedHistory));
-  }, []);
+  const {
+    history,
+    isHistoryOpen,
+    setIsHistoryOpen,
+    addToHistory,
+    clearHistory,
+    loadHistoryItem
+  } = useHistory(setPrompt, setGeneratedCode, setFrameWork, setMode, setOutputScreen, setTab);
 
-  useEffect(() => {
-    localStorage.setItem('forgeui_history', JSON.stringify(history));
-  }, [history]);
+  const {
+    activeBlueprint,
+    setActiveBlueprint,
+    originalBlueprint,
+    setOriginalBlueprint,
+    editingSectionIndex,
+    setEditingSectionIndex,
+    addingSectionIndex,
+    setAddingSectionIndex,
+    handleSaveSection,
+    handleAddSection,
+  } = useBlueprint(setGeneratedCode, setFrameWork, setPreviewHtml);
 
-  const addToHistory = (newPrompt, newCode, frameWorkVal) => {
-    const newItem = {
-      id: Date.now(),
-      prompt: newPrompt,
-      code: newCode,
-      framework: frameWorkVal,
-      date: new Date().toISOString()
-    };
-    setHistory(prev => [newItem, ...prev]);
-  };
-
-  const clearHistory = () => {
-    setHistory([]);
-    toast.info("History cleared");
-  };
-
-  const loadHistoryItem = (item) => {
-    setPrompt(item.prompt);
-    setGeneratedCode(item.code);
-    const fw = options.find(o => o.value === item.framework) || options[1];
-    setFrameWork(fw);
-    setMode('create');
-    setOutputScreen(true);
-    setTab(2); // Preview tab
-    setIsHistoryOpen(false);
-    toast.success("Loaded from history");
-  };
-
-  const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-  const groq = new Groq({ apiKey: import.meta.env.VITE_GROQ_API_KEY, dangerouslyAllowBrowser: true });
-
-  async function generateWithAI(promptText) {
-    if (modelProvider.value === 'gemini') {
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-      const result = await model.generateContent(promptText);
-      return result.response.text();
-    } else {
-      const completion = await groq.chat.completions.create({
-        messages: [{ role: "user", content: promptText }],
-        model: "llama-3.3-70b-versatile",
-      });
-      return completion.choices[0]?.message?.content || "";
-    }
-  }
-
-  // --- Create Mode Logic ---
-
-  const enhancePrompt = async () => {
-    if (!prompt.trim()) return toast.info("Please enter a basic prompt first");
-
-    try {
-      setEnhancing(true);
-      const promptImprovement = buildEnhancementPrompt(prompt, frameWork.value);
-
-      const enhancedText = (await generateWithAI(promptImprovement)).trim();
-      setPrompt(enhancedText);
-      toast.success("Prompt enhanced using AI ✨");
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to enhance prompt");
-    } finally {
-      setEnhancing(false);
-    }
-  };
-
-  async function getResponse() {
-    if (!prompt.trim()) return toast.error("Please describe your component first");
-
-    try {
-      setLoading(true);
-      const promptText = getCreationPrompt(frameWork.value, prompt);
-
-      const text = await generateWithAI(promptText);
-
-      const extractedCode = extractCode(text);
-      setGeneratedCode(extractedCode);
-
-      // Generate preview HTML separate from the source code
-      const preview = generatePreviewHtml(extractedCode, frameWork.value);
-      setPreviewHtml(preview);
-
-      addToHistory(prompt, extractedCode, frameWork.value);
-
-      setOutputScreen(true);
-      setTab(2);
-    } catch (error) {
-      console.error(error);
-      toast.error(error.message || "Something went wrong while generating code");
-    } finally {
-      setLoading(false);
-      // Switch to preview on mobile after generation
-      if (window.innerWidth < 768) setMobileTab('preview');
-    }
-  };
-
-  // --- Improve Mode Logic ---
-
-  async function handleImprovement(actionPrompt) {
-    const codeToRefine = mode === 'create' ? generatedCode : inputCode;
-    if (!codeToRefine.trim()) return toast.error("No code to refine");
-
-    try {
-      setLoading(true);
-      if (mode === 'improve') setImprovedCode("");
-
-      const userInstruction = actionPrompt === 'custom' ? customImprovePrompt : actionPrompt;
-      const fullPrompt = getImprovementPrompt(userInstruction, codeToRefine);
-
-      const text = await generateWithAI(fullPrompt);
-      const extracted = extractCode(text);
-
-      if (mode === 'create') {
-        setGeneratedCode(extracted);
-        addToHistory(prompt + " (Refined)", extracted, frameWork.value);
-        toast.success("Code refined ✨");
-        setCustomImprovePrompt("");
-      } else {
-        setImprovedCode(extracted);
-      }
-
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to improve code");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const {
+    loading,
+    enhancing,
+    enhancePrompt,
+    getFullPageBlueprint,
+    getResponse,
+    handleImprovement
+  } = useAIAction({
+    prompt, setPrompt, frameWork, setFrameWork, modelProvider,
+    setGeneratedCode, setPreviewHtml, addToHistory,
+    mode, inputCode, setImprovedCode, customImprovePrompt, setCustomImprovePrompt,
+    themeOverride, densityOverride,
+    setActiveBlueprint, setOriginalBlueprint,
+    setOutputScreen, setTab, setMobileTab
+  });
 
   const openSaveModal = () => {
-    const codeToSave = mode === 'create' ? generatedCode : improvedCode;
+    const codeToSave = (mode === 'create' || mode === 'fullpage') ? generatedCode : improvedCode;
     if (!codeToSave) return;
     setIsSaveModalOpen(true);
   };
 
   const confirmSave = async (customName, customTags) => {
-    const codeToSave = mode === 'create' ? generatedCode : improvedCode;
+    const codeToSave = (mode === 'create' || mode === 'fullpage') ? generatedCode : improvedCode;
     if (!codeToSave) return;
 
     try {
@@ -235,7 +120,7 @@ const Home = () => {
       }
 
       // Pass customName and customTags to helper
-      const newComponent = prepareComponentForSave(codeToSave, frameWork.value, uniqueFolderName, prompt, timestamp, customName, customTags);
+      const newComponent = prepareComponentForSave(codeToSave, frameWork.value, uniqueFolderName, prompt, timestamp, customName, customTags, mode);
       newComponent.id = id;
 
       await libraryService.saveComponent(newComponent);
@@ -251,14 +136,14 @@ const Home = () => {
   // --- Helper Functions ---
 
   const copyCode = async () => {
-    const textToCopy = mode === 'create' ? generatedCode : improvedCode;
+    const textToCopy = (mode === 'create' || mode === 'fullpage') ? generatedCode : improvedCode;
     if (!textToCopy.trim()) return;
     await navigator.clipboard.writeText(textToCopy);
     toast.success("Copied to clipboard");
   };
 
   const downloadFile = () => {
-    const textToDown = mode === 'create' ? generatedCode : improvedCode;
+    const textToDown = (mode === 'create' || mode === 'fullpage') ? generatedCode : improvedCode;
     if (!textToDown.trim()) return;
     const blob = new Blob([textToDown], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -321,7 +206,7 @@ const Home = () => {
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         history={history}
-        onSelect={loadHistoryItem}
+        onLoad={loadHistoryItem}
         onClear={clearHistory}
       />
 
@@ -334,55 +219,83 @@ const Home = () => {
         <div className={`lg:col-span-5 flex flex-col gap-6 ${mobileTab !== 'create' ? 'hidden md:flex' : 'flex'}`}>
 
           {/* Mode Toggle */}
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-2 rounded-2xl flex gap-1">
+          <div className="flex bg-[#222222] p-1 rounded-xl w-64 shadow-[0_4px_20px_rgba(0,0,0,0.5)] border border-white/5 relative overflow-hidden">
+            <div
+              className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-[#333333] border border-white/10 shadow-lg transition-transform duration-300 ease-out`}
+              style={{ transform: mode === 'create' ? 'translateX(0)' : 'translateX(calc(100% + 4px))' }}
+            ></div>
             <button
               onClick={() => setMode('create')}
-              className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${mode === 'create' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-sm font-semibold transition-colors z-10 ${mode === 'create' ? 'text-white' : 'text-gray-400 hover:text-white'}`}
             >
-              ✨ Create New
+              <i className="fa-solid fa-wand-magic-sparkles mr-2 opacity-70"></i>
+              Create
             </button>
             <button
               onClick={() => setMode('improve')}
-              className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${mode === 'improve' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-sm font-semibold transition-colors z-10 ${mode === 'improve' ? 'text-white' : 'text-gray-400 hover:text-white'}`}
             >
-              🛠️ Improve Existing
+              <i className="fa-solid fa-code-merge mr-2 opacity-70"></i>
+              Improve
             </button>
           </div>
 
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl flex flex-col h-full shadow-2xl flex-1 relative overflow-hidden">
+            {mode === 'create' && (
+              <div className="opacity-0 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <FullPageInput
+                  modelProvider={modelProvider}
+                  setModelProvider={setModelProvider}
+                  prompt={prompt}
+                  setPrompt={setPrompt}
+                  aiOptions={aiOptions}
+                  customSelectStyles={customSelectStyles}
+                  enhancePrompt={enhancePrompt}
+                  enhancing={enhancing}
+                  getFullPageBlueprint={getFullPageBlueprint}
+                  loading={loading}
+                  generatedCode={generatedCode}
+                  themeOverride={themeOverride}
+                  setThemeOverride={setThemeOverride}
+                  densityOverride={densityOverride}
+                  setDensityOverride={setDensityOverride}
+                  themeOptions={themeOptions}
+                  densityOptions={densityOptions}
+                />
 
-            {mode === 'create' ? (
-              <CreateInput
-                modelProvider={modelProvider}
-                setModelProvider={setModelProvider}
-                frameWork={frameWork}
-                setFrameWork={setFrameWork}
-                prompt={prompt}
-                setPrompt={setPrompt}
-                aiOptions={aiOptions}
-                frameworkOptions={options}
-                customSelectStyles={customSelectStyles}
-                enhancePrompt={enhancePrompt}
-                enhancing={enhancing}
-                getResponse={getResponse}
-                loading={loading}
-                generatedCode={generatedCode}
-                outputScreen={outputScreen}
-                customImprovePrompt={customImprovePrompt}
-                setCustomImprovePrompt={setCustomImprovePrompt}
-                handleImprovement={handleImprovement}
-              />
-            ) : (
-              <ImproveInput
-                inputCode={inputCode}
-                setInputCode={setInputCode}
-                customImprovePrompt={customImprovePrompt}
-                setCustomImprovePrompt={setCustomImprovePrompt}
-                handleImprovement={handleImprovement}
-                loading={loading}
-              />
+                <div className="hidden">
+                  <CreateInput
+                    modelProvider={modelProvider}
+                    setModelProvider={setModelProvider}
+                    frameWork={frameWork}
+                    setFrameWork={setFrameWork}
+                    options={formOptions}
+                    prompt={prompt}
+                    setPrompt={setPrompt}
+                    aiOptions={aiOptions}
+                    customSelectStyles={customSelectStyles}
+                    enhancePrompt={enhancePrompt}
+                    enhancing={enhancing}
+                    getResponse={getResponse}
+                    loading={loading}
+                    generatedCode={generatedCode}
+                  />
+                </div>
+              </div>
             )}
 
+            {mode === 'improve' && (
+              <div className="opacity-0 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <ImproveInput
+                  inputCode={inputCode}
+                  setInputCode={setInputCode}
+                  customImprovePrompt={customImprovePrompt}
+                  setCustomImprovePrompt={setCustomImprovePrompt}
+                  handleImprovement={handleImprovement}
+                  loading={loading}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -439,14 +352,14 @@ const Home = () => {
           <span className="text-[10px] font-medium">Create</span>
         </button>
         <button
-          onClick={() => setMobileTab('preview')}
+          onClick={() => { setMobileTab('preview'); setTab(2); setImproveTab('preview'); }}
           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${mobileTab === 'preview' ? 'text-white' : 'text-gray-500'}`}
         >
           <IoSpeedometer size={20} />
           <span className="text-[10px] font-medium">Preview</span>
         </button>
         <button
-          onClick={() => setMobileTab('code')}
+          onClick={() => { setMobileTab('code'); setTab(1); setImproveTab('code'); }}
           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${mobileTab === 'code' ? 'text-white' : 'text-gray-500'}`}
         >
           <IoCodeSlash size={20} />
@@ -459,6 +372,20 @@ const Home = () => {
         onClose={() => setIsSaveModalOpen(false)}
         onSave={confirmSave}
         initialName={(prompt || "Untitled Component").split(' ').slice(0, 3).join(' ')}
+      />
+
+      {editingSectionIndex !== null && activeBlueprint && (
+        <EditSectionModal
+          section={activeBlueprint.sections[editingSectionIndex]}
+          onSave={handleSaveSection}
+          onClose={() => setEditingSectionIndex(null)}
+        />
+      )}
+
+      <SectionPickerModal
+        isOpen={addingSectionIndex !== null}
+        onClose={() => setAddingSectionIndex(null)}
+        onSelect={handleAddSection}
       />
 
     </>
