@@ -47,7 +47,7 @@ const OutputDisplay = ({
             </div>
 
             {/* CREATE MODE OUTPUT */}
-            {mode === 'create' || mode === 'screenshot' ? (
+            {mode === 'create' ? (
                 !outputScreen ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-gray-600">
                         <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
