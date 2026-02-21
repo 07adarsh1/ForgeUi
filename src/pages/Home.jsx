@@ -3,14 +3,16 @@ import Navbar from '../components/Navbar'
 import HistorySidebar from '../components/HistorySidebar'
 import { libraryService } from '../lib/db';
 import { generatePreviewHtml } from '../lib/preview';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { toast } from 'react-toastify';
+import Groq from "groq-sdk";
+import { getCreationPrompt, getImprovementPrompt } from '../lib/prompts';
 import { extractCode, prepareComponentForSave } from '../lib/componentUtils';
+import { buildEnhancementPrompt } from '../lib/promptEnhancer';
 import SaveModal from '../components/SaveModal';
 import { IoClose, IoSparkles, IoSpeedometer, IoCodeSlash } from 'react-icons/io5';
-
-import { formOptions, aiOptions, themeOptions, densityOptions } from '../lib/constants';
-import { useHistory } from '../hooks/useHistory';
-import { useBlueprint } from '../hooks/useBlueprint';
-import { useAIAction } from '../hooks/useAIAction';
+import { getFullPageBlueprintPrompt } from '../lib/pagePrompts';
+import { generatePageCode } from '../lib/recipes';
 
 // Subcomponents
 import CreateInput from '../components/home/CreateInput';
@@ -22,69 +24,341 @@ import SectionPickerModal from '../components/home/SectionPickerModal';
 
 const Home = () => {
 
+  const options = [
+    { value: 'html-css', label: 'HTML + CSS' },
+    { value: 'html-tailwind', label: 'HTML + Tailwind' },
+    { value: 'html-bootstrap', label: 'HTML + Bootstrap' },
+    { value: 'html-css-js', label: 'HTML + CSS + JS' },
+    { value: 'react-tailwind', label: 'React + Tailwind' },
+    { value: 'html-tailwind-bootstrap', label: 'All Frameworks' },
+  ];
+
+  const aiOptions = [
+    { value: 'gemini', label: 'Gemini 2.5 Flash' },
+    { value: 'groq', label: 'Groq (Llama 3)' }
+  ];
+
+  const themeOptions = [
+    { value: 'auto', label: 'Auto (Detect from prompt)' },
+    { value: 'minimal', label: 'Minimal' },
+    { value: 'bold', label: 'Bold' },
+    { value: 'enterprise', label: 'Enterprise' }
+  ];
+
+  const densityOptions = [
+    { value: 'auto', label: 'Auto (Detect from prompt)' },
+    { value: 'comfortable', label: 'Comfortable' },
+    { value: 'compact', label: 'Compact' }
+  ];
+
   // Global State
-  const [mode, setMode] = useState('create');
+  const [mode, setMode] = useState('create'); // 'create' | 'improve'
+  const [loading, setLoading] = useState(false);
   const [isNewTabOpen, setIsNewTabOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // 'Create' Mode State
   const [prompt, setPrompt] = useState("");
-  const [frameWork, setFrameWork] = useState(formOptions[1]);
+  const [frameWork, setFrameWork] = useState(options[1]);
   const [modelProvider, setModelProvider] = useState(aiOptions[0]);
   const [generatedCode, setGeneratedCode] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
   const [outputScreen, setOutputScreen] = useState(false);
   const [tab, setTab] = useState(1);
+  const [enhancing, setEnhancing] = useState(false);
   const [themeOverride, setThemeOverride] = useState(themeOptions[0]);
   const [densityOverride, setDensityOverride] = useState(densityOptions[0]);
 
   // 'Improve' Mode State
   const [inputCode, setInputCode] = useState("");
   const [improvedCode, setImprovedCode] = useState("");
-  const [improveTab, setImproveTab] = useState('diff');
+
+  const [improveTab, setImproveTab] = useState('diff'); // 'diff' | 'code' | 'preview'
   const [customImprovePrompt, setCustomImprovePrompt] = useState("");
 
+  const [activeBlueprint, setActiveBlueprint] = useState(null);
+  const [originalBlueprint, setOriginalBlueprint] = useState(null);
+  const [editingSectionIndex, setEditingSectionIndex] = useState(null);
+  const [addingSectionIndex, setAddingSectionIndex] = useState(null);
+
+  // 🕒 History State
+  const [history, setHistory] = useState([]);
+
   // Mobile State
-  const [mobileTab, setMobileTab] = useState('create');
+  const [mobileTab, setMobileTab] = useState('create'); // 'create' | 'preview' | 'code'
 
-  const {
-    history,
-    isHistoryOpen,
-    setIsHistoryOpen,
-    addToHistory,
-    clearHistory,
-    loadHistoryItem
-  } = useHistory(setPrompt, setGeneratedCode, setFrameWork, setMode, setOutputScreen, setTab);
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('forgeui_history');
+    if (savedHistory) setHistory(JSON.parse(savedHistory));
+  }, []);
 
-  const {
-    activeBlueprint,
-    setActiveBlueprint,
-    originalBlueprint,
-    setOriginalBlueprint,
-    editingSectionIndex,
-    setEditingSectionIndex,
-    addingSectionIndex,
-    setAddingSectionIndex,
-    handleSaveSection,
-    handleAddSection,
-  } = useBlueprint(setGeneratedCode, setFrameWork, setPreviewHtml);
+  useEffect(() => {
+    localStorage.setItem('forgeui_history', JSON.stringify(history));
+  }, [history]);
 
-  const {
-    loading,
-    enhancing,
-    enhancePrompt,
-    getFullPageBlueprint,
-    getResponse,
-    handleImprovement
-  } = useAIAction({
-    prompt, setPrompt, frameWork, setFrameWork, modelProvider,
-    setGeneratedCode, setPreviewHtml, addToHistory,
-    mode, inputCode, setImprovedCode, customImprovePrompt, setCustomImprovePrompt,
-    themeOverride, densityOverride,
-    setActiveBlueprint, setOriginalBlueprint,
-    setOutputScreen, setTab, setMobileTab
-  });
+  const updateBlueprint = (newBlueprint) => {
+    setActiveBlueprint(newBlueprint);
+    const pageCode = generatePageCode(newBlueprint);
+    setGeneratedCode(pageCode);
+    const reactFw = options.find(o => o.value === 'react-tailwind');
+    setFrameWork(reactFw);
+    setPreviewHtml(generatePreviewHtml(pageCode, 'react-tailwind'));
+  };
+
+  useEffect(() => {
+    const handleIframeMessage = (e) => {
+      let { type, index } = e.data || {};
+      if (!type) return;
+
+      index = Number(index);
+
+      if (type === 'EDIT_SECTION') {
+        setEditingSectionIndex(index);
+      } else if (type === 'OPEN_ADD_MODAL') {
+        setAddingSectionIndex(index);
+      } else if (type === 'DELETE_SECTION') {
+        if (!activeBlueprint) return;
+        const newBlueprint = { ...activeBlueprint };
+        newBlueprint.sections = newBlueprint.sections.filter((_, i) => i !== index);
+        updateBlueprint(newBlueprint);
+      } else if (type === 'REGENERATE_SECTION') {
+        if (!activeBlueprint || !originalBlueprint) return;
+        const newBlueprint = { ...activeBlueprint };
+        newBlueprint.sections = [...newBlueprint.sections];
+        const targetId = newBlueprint.sections[index]?.id;
+        const origSection = originalBlueprint.sections.find(s => s.id === targetId);
+        if (origSection) {
+          newBlueprint.sections[index] = JSON.parse(JSON.stringify(origSection));
+          updateBlueprint(newBlueprint);
+        }
+      }
+    };
+    window.addEventListener('message', handleIframeMessage);
+    return () => window.removeEventListener('message', handleIframeMessage);
+  }, [activeBlueprint, originalBlueprint, options]);
+
+  const handleSaveSection = (updatedSection) => {
+    if (activeBlueprint !== null && editingSectionIndex !== null) {
+      const newBlueprint = { ...activeBlueprint };
+      newBlueprint.sections[editingSectionIndex] = updatedSection;
+      updateBlueprint(newBlueprint);
+      setEditingSectionIndex(null);
+    }
+  };
+
+  const handleAddSection = (sectionConfig) => {
+    if (activeBlueprint !== null && addingSectionIndex !== null) {
+      const newBlueprint = { ...activeBlueprint };
+
+      const newSection = {
+        id: `section_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        type: sectionConfig.type,
+        props: JSON.parse(JSON.stringify(sectionConfig.defaultProps))
+      };
+
+      newBlueprint.sections.splice(addingSectionIndex, 0, newSection);
+      updateBlueprint(newBlueprint);
+      setAddingSectionIndex(null);
+    }
+  };
+
+  const addToHistory = (newPrompt, newCode, frameWorkVal) => {
+    const newItem = {
+      id: Date.now(),
+      prompt: newPrompt,
+      code: newCode,
+      framework: frameWorkVal,
+      date: new Date().toISOString()
+    };
+    setHistory(prev => [newItem, ...prev]);
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    toast.info("History cleared");
+  };
+
+  const loadHistoryItem = (item) => {
+    setPrompt(item.prompt);
+    setGeneratedCode(item.code);
+    const fw = options.find(o => o.value === item.framework) || options[1];
+    setFrameWork(fw);
+    setMode('create');
+    setOutputScreen(true);
+    setTab(2); // Preview tab
+    setIsHistoryOpen(false);
+    toast.success("Loaded from history");
+  };
+
+  const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+  const groq = new Groq({ apiKey: import.meta.env.VITE_GROQ_API_KEY, dangerouslyAllowBrowser: true });
+
+  async function generateWithAI(promptText) {
+    if (modelProvider.value === 'gemini') {
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const result = await model.generateContent(promptText);
+      return result.response.text();
+    } else {
+      const completion = await groq.chat.completions.create({
+        messages: [{ role: "user", content: promptText }],
+        model: "llama-3.3-70b-versatile",
+      });
+      return completion.choices[0]?.message?.content || "";
+    }
+  }
+
+  // --- Create Mode Logic ---
+
+  const enhancePrompt = async () => {
+    if (!prompt.trim()) return toast.info("Please enter a basic prompt first");
+
+    try {
+      setEnhancing(true);
+      const promptImprovement = buildEnhancementPrompt(prompt, frameWork.value);
+
+      const enhancedText = (await generateWithAI(promptImprovement)).trim();
+      setPrompt(enhancedText);
+      toast.success("Prompt enhanced using AI ✨");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to enhance prompt");
+    } finally {
+      setEnhancing(false);
+    }
+  };
+
+  const getFullPageBlueprint = async () => {
+    if (!prompt.trim()) return toast.error("Please describe your website first");
+
+    try {
+      setLoading(true);
+
+      let finalTheme = themeOverride.value;
+      let finalDensity = densityOverride.value;
+
+      if (finalTheme === 'auto') {
+        const p = prompt.toLowerCase();
+        if (p.includes('enterprise') || p.includes('corporate') || p.includes('b2b') || p.includes('healthcare') || p.includes('finance')) {
+          finalTheme = 'enterprise';
+        } else if (p.includes('ai') || p.includes('startup') || p.includes('modern') || p.includes('saas') || p.includes('innovation')) {
+          finalTheme = 'bold';
+        } else {
+          finalTheme = 'minimal';
+        }
+      }
+
+      if (finalDensity === 'auto') {
+        const p = prompt.toLowerCase();
+        if (p.includes('dashboard') || p.includes('admin') || p.includes('analytics')) {
+          finalDensity = 'compact';
+        } else {
+          finalDensity = 'comfortable';
+        }
+      }
+
+      const promptText = getFullPageBlueprintPrompt(prompt, finalTheme, finalDensity);
+
+      const text = await generateWithAI(promptText);
+
+      // Parse JSON from text, extracting markdown codeblock if Groq returned text around it
+      let jsonStr = text;
+      const codeBlockMatch = text.match(/```(?:\w+)?\n?([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1].trim();
+      }
+
+      const extractedJSON = jsonStr.match(/\{[\s\S]*\}/);
+      if (!extractedJSON) throw new Error("Invalid format returned by AI");
+      const blueprint = JSON.parse(extractedJSON[0]);
+      setActiveBlueprint(blueprint);
+      setOriginalBlueprint(JSON.parse(JSON.stringify(blueprint)));
+
+      const pageCode = generatePageCode(blueprint);
+
+      setGeneratedCode(pageCode);
+      const reactFw = options.find(o => o.value === 'react-tailwind');
+      setFrameWork(reactFw);
+
+      const preview = generatePreviewHtml(pageCode, 'react-tailwind');
+      setPreviewHtml(preview);
+
+      addToHistory(prompt + ' (Full Page)', pageCode, 'react-tailwind');
+
+      setOutputScreen(true);
+      setTab(2);
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || "Failed to generate blueprint or parse JSON");
+    } finally {
+      setLoading(false);
+      if (window.innerWidth < 768) setMobileTab('preview');
+    }
+  };
+
+  async function getResponse() {
+    if (!prompt.trim()) return toast.error("Please describe your component first");
+
+    try {
+      setLoading(true);
+      const promptText = getCreationPrompt(frameWork.value, prompt);
+
+      const text = await generateWithAI(promptText);
+
+      const extractedCode = extractCode(text);
+      setGeneratedCode(extractedCode);
+
+      // Generate preview HTML separate from the source code
+      const preview = generatePreviewHtml(extractedCode, frameWork.value);
+      setPreviewHtml(preview);
+
+      addToHistory(prompt, extractedCode, frameWork.value);
+
+      setOutputScreen(true);
+      setTab(2);
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || "Something went wrong while generating code");
+    } finally {
+      setLoading(false);
+      // Switch to preview on mobile after generation
+      if (window.innerWidth < 768) setMobileTab('preview');
+    }
+  };
+
+  // --- Improve Mode Logic ---
+
+  async function handleImprovement(actionPrompt) {
+    const codeToRefine = mode === 'create' ? generatedCode : inputCode;
+    if (!codeToRefine.trim()) return toast.error("No code to refine");
+
+    try {
+      setLoading(true);
+      if (mode === 'improve') setImprovedCode("");
+
+      const userInstruction = actionPrompt === 'custom' ? customImprovePrompt : actionPrompt;
+      const fullPrompt = getImprovementPrompt(userInstruction, codeToRefine);
+
+      const text = await generateWithAI(fullPrompt);
+      const extracted = extractCode(text);
+
+      if (mode === 'create') {
+        setGeneratedCode(extracted);
+        addToHistory(prompt + " (Refined)", extracted, frameWork.value);
+        toast.success("Code refined ✨");
+        setCustomImprovePrompt("");
+      } else {
+        setImprovedCode(extracted);
+      }
+
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to improve code");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const openSaveModal = () => {
     const codeToSave = (mode === 'create' || mode === 'fullpage') ? generatedCode : improvedCode;
@@ -206,7 +480,7 @@ const Home = () => {
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         history={history}
-        onLoad={loadHistoryItem}
+        onSelect={loadHistoryItem}
         onClear={clearHistory}
       />
 
@@ -219,83 +493,85 @@ const Home = () => {
         <div className={`lg:col-span-5 flex flex-col gap-6 ${mobileTab !== 'create' ? 'hidden md:flex' : 'flex'}`}>
 
           {/* Mode Toggle */}
-          <div className="flex bg-[#222222] p-1 rounded-xl w-64 shadow-[0_4px_20px_rgba(0,0,0,0.5)] border border-white/5 relative overflow-hidden">
-            <div
-              className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-[#333333] border border-white/10 shadow-lg transition-transform duration-300 ease-out`}
-              style={{ transform: mode === 'create' ? 'translateX(0)' : 'translateX(calc(100% + 4px))' }}
-            ></div>
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-2 rounded-2xl flex gap-1">
             <button
               onClick={() => setMode('create')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-sm font-semibold transition-colors z-10 ${mode === 'create' ? 'text-white' : 'text-gray-400 hover:text-white'}`}
+              className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${mode === 'create' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
             >
-              <i className="fa-solid fa-wand-magic-sparkles mr-2 opacity-70"></i>
-              Create
+              ✨ Create
+            </button>
+            <button
+              onClick={() => setMode('fullpage')}
+              className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${mode === 'fullpage' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+            >
+              📄 Full Page
             </button>
             <button
               onClick={() => setMode('improve')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-sm font-semibold transition-colors z-10 ${mode === 'improve' ? 'text-white' : 'text-gray-400 hover:text-white'}`}
+              className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all ${mode === 'improve' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
             >
-              <i className="fa-solid fa-code-merge mr-2 opacity-70"></i>
-              Improve
+              🛠️ Improve
             </button>
           </div>
 
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl flex flex-col h-full shadow-2xl flex-1 relative overflow-hidden">
-            {mode === 'create' && (
-              <div className="opacity-0 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <FullPageInput
-                  modelProvider={modelProvider}
-                  setModelProvider={setModelProvider}
-                  prompt={prompt}
-                  setPrompt={setPrompt}
-                  aiOptions={aiOptions}
-                  customSelectStyles={customSelectStyles}
-                  enhancePrompt={enhancePrompt}
-                  enhancing={enhancing}
-                  getFullPageBlueprint={getFullPageBlueprint}
-                  loading={loading}
-                  generatedCode={generatedCode}
-                  themeOverride={themeOverride}
-                  setThemeOverride={setThemeOverride}
-                  densityOverride={densityOverride}
-                  setDensityOverride={setDensityOverride}
-                  themeOptions={themeOptions}
-                  densityOptions={densityOptions}
-                />
 
-                <div className="hidden">
-                  <CreateInput
-                    modelProvider={modelProvider}
-                    setModelProvider={setModelProvider}
-                    frameWork={frameWork}
-                    setFrameWork={setFrameWork}
-                    options={formOptions}
-                    prompt={prompt}
-                    setPrompt={setPrompt}
-                    aiOptions={aiOptions}
-                    customSelectStyles={customSelectStyles}
-                    enhancePrompt={enhancePrompt}
-                    enhancing={enhancing}
-                    getResponse={getResponse}
-                    loading={loading}
-                    generatedCode={generatedCode}
-                  />
-                </div>
-              </div>
+            {mode === 'create' && (
+              <CreateInput
+                modelProvider={modelProvider}
+                setModelProvider={setModelProvider}
+                frameWork={frameWork}
+                setFrameWork={setFrameWork}
+                prompt={prompt}
+                setPrompt={setPrompt}
+                aiOptions={aiOptions}
+                frameworkOptions={options}
+                customSelectStyles={customSelectStyles}
+                enhancePrompt={enhancePrompt}
+                enhancing={enhancing}
+                getResponse={getResponse}
+                loading={loading}
+                generatedCode={generatedCode}
+                outputScreen={outputScreen}
+                customImprovePrompt={customImprovePrompt}
+                setCustomImprovePrompt={setCustomImprovePrompt}
+                handleImprovement={handleImprovement}
+              />
+            )}
+
+            {mode === 'fullpage' && (
+              <FullPageInput
+                modelProvider={modelProvider}
+                setModelProvider={setModelProvider}
+                prompt={prompt}
+                setPrompt={setPrompt}
+                aiOptions={aiOptions}
+                customSelectStyles={customSelectStyles}
+                enhancePrompt={enhancePrompt}
+                enhancing={enhancing}
+                getFullPageBlueprint={getFullPageBlueprint}
+                loading={loading}
+                generatedCode={generatedCode}
+                themeOverride={themeOverride}
+                setThemeOverride={setThemeOverride}
+                densityOverride={densityOverride}
+                setDensityOverride={setDensityOverride}
+                themeOptions={themeOptions}
+                densityOptions={densityOptions}
+              />
             )}
 
             {mode === 'improve' && (
-              <div className="opacity-0 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <ImproveInput
-                  inputCode={inputCode}
-                  setInputCode={setInputCode}
-                  customImprovePrompt={customImprovePrompt}
-                  setCustomImprovePrompt={setCustomImprovePrompt}
-                  handleImprovement={handleImprovement}
-                  loading={loading}
-                />
-              </div>
+              <ImproveInput
+                inputCode={inputCode}
+                setInputCode={setInputCode}
+                customImprovePrompt={customImprovePrompt}
+                setCustomImprovePrompt={setCustomImprovePrompt}
+                handleImprovement={handleImprovement}
+                loading={loading}
+              />
             )}
+
           </div>
         </div>
 
@@ -352,14 +628,14 @@ const Home = () => {
           <span className="text-[10px] font-medium">Create</span>
         </button>
         <button
-          onClick={() => { setMobileTab('preview'); setTab(2); setImproveTab('preview'); }}
+          onClick={() => setMobileTab('preview')}
           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${mobileTab === 'preview' ? 'text-white' : 'text-gray-500'}`}
         >
           <IoSpeedometer size={20} />
           <span className="text-[10px] font-medium">Preview</span>
         </button>
         <button
-          onClick={() => { setMobileTab('code'); setTab(1); setImproveTab('code'); }}
+          onClick={() => setMobileTab('code')}
           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${mobileTab === 'code' ? 'text-white' : 'text-gray-500'}`}
         >
           <IoCodeSlash size={20} />

@@ -391,8 +391,8 @@ const IconButton = ({ icon, onClick, disabled }) => {
 
 const SectionControlBar = ({ label, index, onRegenerate, onEdit, onDelete }) => {
   return (
-    <div className="absolute top-4 right-4 z-[60] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-      <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 backdrop-blur-md shadow-lg">
+    <div className="absolute top-4 right-4 z-[60] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+      <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 backdrop-blur-md shadow-lg scale-90 sm:scale-100 origin-top-right">
         <span className="text-xs text-white/60 mr-2 font-medium tracking-wide uppercase">{label}</span>
         <div className="flex items-center gap-1 border-l border-white/10 pl-2">
           <IconButton icon="fa-arrows-rotate" onClick={() => onRegenerate(index)} />
@@ -407,7 +407,7 @@ const SectionControlBar = ({ label, index, onRegenerate, onEdit, onDelete }) => 
 const AddSectionTrigger = ({ index, onAdd }) => {
   return (
     <div className="relative group/trigger -my-3 z-50 flex items-center justify-center h-6">
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/trigger:opacity-100 transition-opacity duration-200">
+      <div className="absolute inset-0 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover/trigger:opacity-100 transition-opacity duration-200">
         <div className="w-full border-t border-dashed border-white/20"></div>
         <button 
           onClick={() => onAdd(index)}
