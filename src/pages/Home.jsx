@@ -35,7 +35,7 @@ const Home = () => {
 
   const aiOptions = [
     { value: 'gemini', label: 'Gemini 2.5 Flash' },
-    { value: 'groq', label: 'Groq (Llama 3)' }
+    { value: 'groq', label: 'Groq (openai/gpt-oss-120b)' }
   ];
 
   const themeOptions = [
@@ -203,7 +203,7 @@ const Home = () => {
     } else {
       const completion = await groq.chat.completions.create({
         messages: [{ role: "user", content: promptText }],
-        model: "llama-3.3-70b-versatile",
+        model: "openai/gpt-oss-120b",
       });
       return completion.choices[0]?.message?.content || "";
     }
