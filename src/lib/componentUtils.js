@@ -2,8 +2,19 @@
  * Extracts code from a markdown code block if present, otherwise returns the raw text.
  */
 export const extractCode = (response) => {
-    const match = response.match(/```(?:\w+)?\n?([\s\S]*?)```/);
-    return match ? match[1].trim() : response.trim();
+    // Try to find a properly closed code block
+    const match = response.match(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/);
+    if (match) {
+        return match[1].trim();
+    }
+    
+    // If an opening block exists but no closing one (e.g., truncated completion)
+    const unclosedMatch = response.match(/```[a-zA-Z0-9_-]*\s*([\s\S]*)/);
+    if (unclosedMatch) {
+        return unclosedMatch[1].trim();
+    }
+    
+    return response.trim();
 };
 
 /**

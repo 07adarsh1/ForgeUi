@@ -264,9 +264,14 @@ const Home = () => {
 
       // Parse JSON from text, extracting markdown codeblock if Groq returned text around it
       let jsonStr = text;
-      const codeBlockMatch = text.match(/```(?:\w+)?\n?([\s\S]*?)```/);
+      const codeBlockMatch = text.match(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/);
       if (codeBlockMatch) {
         jsonStr = codeBlockMatch[1].trim();
+      } else {
+        const unclosedMatch = text.match(/```[a-zA-Z0-9_-]*\s*([\s\S]*)/);
+        if (unclosedMatch) {
+            jsonStr = unclosedMatch[1].trim();
+        }
       }
 
       const extractedJSON = jsonStr.match(/\{[\s\S]*\}/);
